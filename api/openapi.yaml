@@ -1,0 +1,372 @@
+openapi: 3.1.0
+info:
+  title: Subscription Server API
+  version: 1.0.0
+  description: >-
+    API contract for standalone Subscription Server with Google OAuth, Admin/Reseller RBAC,
+    localized pricing, single-use codes, payment intents, and sheet append history hooks.
+servers:
+  - url: https://subscription.example.com
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Pricing
+  - name: Payments
+  - name: Codes
+  - name: Admin
+  - name: Webhooks
+
+paths:
+  /v1/auth/google/callback:
+    post:
+      tags: [Auth]
+      summary: Exchange Google OIDC credential for app session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token:
+                  type: string
+      responses:
+        '200':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+
+  /v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token and issue new access token
+      responses:
+        '200':
+          description: Refreshed tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+
+  /v1/me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile and roles
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+
+  /v1/pricing/quote:
+    post:
+      tags: [Pricing]
+      summary: Return effective country price quote for duration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [duration_code]
+              properties:
+                duration_code:
+                  type: string
+                  enum: [6_months, 12_months]
+      responses:
+        '200':
+          description: Price quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+
+  /v1/payments/intents:
+    post:
+      tags: [Payments]
+      summary: Create payment intent for selected flow and duration
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentIntentRequest'
+      responses:
+        '201':
+          description: Payment intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentResponse'
+
+  /v1/payments/intents/{id}:
+    get:
+      tags: [Payments]
+      summary: Get payment intent status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentResponse'
+
+  /v1/codes/issue:
+    post:
+      tags: [Codes]
+      summary: Issue code after successful payment
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_intent_id]
+              properties:
+                payment_intent_id:
+                  type: string
+      responses:
+        '201':
+          description: Code issued/redeemed depending on flow type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueCodeResponse'
+
+  /v1/codes/redeem:
+    post:
+      tags: [Codes]
+      summary: Redeem a one-time code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code_value]
+              properties:
+                code_value:
+                  type: string
+      responses:
+        '200':
+          description: Code redeemed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedeemCodeResponse'
+        '409':
+          description: Invalid state (already redeemed/expired)
+
+  /v1/admin/users/{userId}/roles:
+    put:
+      tags: [Admin]
+      summary: Set roles for a user (admin only)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles:
+                  type: array
+                  items:
+                    type: string
+                    enum: [admin, reseller]
+      responses:
+        '200':
+          description: Roles updated
+
+  /v1/admin/code-batches:
+    post:
+      tags: [Admin]
+      summary: Create bulk printed-card code batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity, duration_code, expiry_policy]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+                duration_code:
+                  type: string
+                  enum: [6_months, 12_months]
+                expiry_policy:
+                  type: string
+                  enum: [fixed_12_months]
+                  default: fixed_12_months
+                notes:
+                  type: string
+      responses:
+        '201':
+          description: Batch created
+
+  /v1/webhooks/payments/{provider}:
+    post:
+      tags: [Webhooks]
+      summary: Payment provider webhook receiver
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    AuthSessionResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+
+    MeResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        display_name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [admin, reseller]
+
+    QuoteResponse:
+      type: object
+      properties:
+        country_code:
+          type: string
+          nullable: true
+        used_fallback:
+          type: boolean
+        duration_code:
+          type: string
+        currency:
+          type: string
+        amount_minor:
+          type: integer
+
+    CreatePaymentIntentRequest:
+      type: object
+      required: [flow_type, duration_code, payment_method]
+      properties:
+        flow_type:
+          type: string
+          enum: [direct_subscribe, reseller_code, bulk_printed_card]
+        duration_code:
+          type: string
+          enum: [6_months, 12_months]
+        payment_method:
+          type: string
+          enum: [qris, card]
+
+    PaymentIntentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        provider:
+          type: string
+        method:
+          type: string
+        status:
+          type: string
+          enum: [created, pending, paid, failed, expired, canceled]
+        amount_minor:
+          type: integer
+        currency:
+          type: string
+        provider_payload:
+          type: object
+          additionalProperties: true
+
+    IssueCodeResponse:
+      type: object
+      properties:
+        code_id:
+          type: string
+        code_value:
+          type: string
+        status:
+          type: string
+          enum: [issued, redeemed]
+        redeem_expires_at:
+          type: string
+          nullable: true
+
+    RedeemCodeResponse:
+      type: object
+      properties:
+        code_id:
+          type: string
+        status:
+          type: string
+          enum: [redeemed]
+        redeemed_at:
+          type: string
+

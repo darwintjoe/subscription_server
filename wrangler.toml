@@ -1,0 +1,8 @@
+name = "subscription-live"
+main = "backend/worker.mjs"
+compatibility_date = "2026-03-09"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "subscription-live"
+database_id = "fc35beaa-95de-478a-96c8-d7d8ecbece2a"

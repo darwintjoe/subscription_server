@@ -1,0 +1,25 @@
+C:\workspace\subscription_server>wrangler deploy
+
+ ⛅️ wrangler 4.71.0
+───────────────────
+Total Upload: 7.22 KiB / gzip: 2.31 KiB
+Your Worker has access to the following bindings:
+Binding                         Resource
+env.DB (subscription-live)      D1 Database
+
+Uploaded subscription-live (19.26 sec)
+▲ [WARNING] Because 'workers_dev' is not in your Wrangler file, it will be enabled for this deployment by default.
+
+  To override this setting, you can disable workers.dev by explicitly setting
+  'workers_dev = false' in your Wrangler file.
+
+
+▲ [WARNING] Because your 'workers.dev' route is enabled and your 'preview_urls' setting is not in your Wrangler file, Preview URLs will be enabled for this deployment by default.
+
+  To override this setting, you can disable Preview URLs by explicitly setting
+  'preview_urls = false' in your Wrangler file.
+
+
+Deployed subscription-live triggers (10.45 sec)
+  https://subscription-live.applocator.workers.dev
+Current Version ID: dc37fd92-9869-48cb-9e6d-9a76f1fe0abb

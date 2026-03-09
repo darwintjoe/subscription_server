@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Subscription Admin</title></head>
+<body>
+  <h1>Subscription Admin</h1>
+  <p>Lean admin console (single app): manage static pricing config JSON.</p>
+  <textarea id="cfg" rows="20" cols="100"></textarea><br>
+  <button id="save">Save Local Draft</button>
+  <pre id="out"></pre>
+<script>
+const key='pricing_config_draft';
+const defaultCfg={ID:{"12_months":["IDR",999000],"6_months":["IDR",699000]},VN:{"12_months":["VND",999000],"6_months":["VND",699000]},TH:{"12_months":["THB",1999],"6_months":["THB",1499]},MY:{"12_months":["MYR",299],"6_months":["MYR",199]},MM:{"12_months":["MMK",49000],"6_months":["MMK",29000]},fallback:{"12_months":["USD",9900],"6_months":["USD",6900]}};
+const ta=document.getElementById('cfg'); ta.value=localStorage.getItem(key)||JSON.stringify(defaultCfg,null,2);
+document.getElementById('save').onclick=()=>{try{JSON.parse(ta.value);localStorage.setItem(key,ta.value);out.textContent='Saved local draft. Deploy this JSON into Worker config.';}catch(e){out.textContent='Invalid JSON: '+e.message}}
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>Reseller PWA</title>
+</head>
+<body>
+  <h1>Reseller PWA</h1>
+  <label>API Base <input id="base" value="http://localhost:8787"></label><br>
+  <label>Country <input id="country" value="ID"></label>
+  <label>Duration
+    <select id="duration"><option>6_months</option><option selected>12_months</option></select>
+  </label>
+  <button id="quote">Quote</button>
+  <pre id="quoteOut"></pre>
+  <hr>
+  <button id="createPayment">Create Payment Intent</button>
+  <pre id="paymentOut"></pre>
+  <button id="markPaid">Simulate Webhook Paid</button>
+  <button id="issueCode">Issue Code</button>
+  <pre id="codeOut"></pre>
+  <button id="redeemCode">Redeem Last Code</button>
+  <pre id="redeemOut"></pre>
+<script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+let intent,lastCode,quote;
+const j=(id)=>document.getElementById(id);
+async function api(path,method='GET',body){
+ const res=await fetch(j('base').value+path,{method,headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const txt=await res.text(); try{return {ok:res.ok,data:JSON.parse(txt)}}catch{return{ok:res.ok,data:txt}}
+}
+j('quote').onclick=async()=>{quote=(await api('/v1/pricing/quote','POST',{duration_code:j('duration').value,country_code:j('country').value})).data;j('quoteOut').textContent=JSON.stringify(quote,null,2)};
+j('createPayment').onclick=async()=>{const r=await api('/v1/payments/intents','POST',{payment_method:'qris',amount_minor:quote.amount_minor,currency:quote.currency,flow_type:'reseller_code',duration_code:j('duration').value});intent=r.data;j('paymentOut').textContent=JSON.stringify(r.data,null,2)};
+j('markPaid').onclick=async()=>{const r=await api('/v1/webhooks/payments/mock','POST',{payment_intent_id:intent.id});j('paymentOut').textContent+='\n'+JSON.stringify(r.data,null,2)};
+j('issueCode').onclick=async()=>{const r=await api('/v1/codes/issue','POST',{payment_intent_id:intent.id,flow_type:'reseller_code',duration_code:j('duration').value});lastCode=r.data.code_value;j('codeOut').textContent=JSON.stringify(r.data,null,2)};
+j('redeemCode').onclick=async()=>{const r=await api('/v1/codes/redeem','POST',{code_value:lastCode});j('redeemOut').textContent=JSON.stringify(r.data,null,2)};
+</script>
+</body>
+</html>
