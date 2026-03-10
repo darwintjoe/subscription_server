@@ -12,9 +12,13 @@ const DEFAULT_PAYMENT_METHODS = {
 export default {
   async fetch(request, env, ctx) {
     try {
-      return await router(request, env, ctx);
+      if (request.method === "OPTIONS") {
+        return corsPreflight(request);
+      }
+      const response = await router(request, env, ctx);
+      return withCors(request, response);
     } catch (error) {
-      return json({ error: "internal_error", detail: error.message }, 500);
+      return withCors(request, json({ error: "internal_error", detail: error.message }, 500));
     }
   },
 };
@@ -1181,6 +1185,43 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "content-type": "application/json" },
+  });
+}
+
+function corsPreflight(request) {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(request),
+  });
+}
+
+function withCors(request, response) {
+  const headers = new Headers(response.headers);
+  const extras = corsHeaders(request);
+  extras.forEach((value, key) => headers.set(key, value));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function corsHeaders(request) {
+  const origin = request.headers.get("origin") || "";
+  const allowedOrigins = new Set([
+    "https://subscription-server-dusky.vercel.app",
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "http://127.0.0.1:8787",
+    "http://localhost:8787",
+  ]);
+  const allowOrigin = allowedOrigins.has(origin) ? origin : "https://subscription-server-dusky.vercel.app";
+  return new Headers({
+    "access-control-allow-origin": allowOrigin,
+    "access-control-allow-methods": "GET,POST,PUT,OPTIONS",
+    "access-control-allow-headers": "content-type,authorization",
+    "access-control-max-age": "86400",
+    "vary": "Origin",
   });
 }
 

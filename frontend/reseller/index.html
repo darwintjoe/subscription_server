@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="manifest" href="./manifest.webmanifest">
   <title>Sell More Subscription</title>
   <style>
     :root {
@@ -322,7 +322,7 @@
   </main>
 
   <script>
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
 
     const state = {
       quote: null,
