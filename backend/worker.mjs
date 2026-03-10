@@ -4,6 +4,7 @@ const DURATIONS = ["1_day", "6_months", "12_months"];
 const PURCHASE_DURATIONS = ["6_months", "12_months"];
 const PAYMENT_METHODS = ["qris", "card"];
 const FLOW_TYPES = ["direct_subscribe", "reseller_code", "bulk_printed_card"];
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const DEFAULT_PAYMENT_METHODS = {
   qris: { enabled: true, provider: "xendit" },
   card: { enabled: true, provider: "stripe" },
@@ -422,7 +423,7 @@ async function handleIssueCode(request, env, ctx, db, user) {
     exp: redeemExpiresAt ? Date.parse(redeemExpiresAt) : null,
     payment_ref: intent.id,
   };
-  const codeValue = await signCode(payload, env.CODE_PRIVATE_JWK);
+  const codeValue = await createReadableCodeValue(db, durationCode);
   const status = flow === "direct_subscribe" ? "redeemed" : "issued";
   const redeemedAt = flow === "direct_subscribe" ? new Date().toISOString() : null;
 
@@ -473,10 +474,15 @@ async function handleRedeemCode(request, env, ctx, db, user) {
   const body = await readJson(request);
   if (!body.code_value) return json({ error: "code_value_required" }, 400);
 
-  const decoded = await verifyCode(body.code_value, env.CODE_PUBLIC_JWK);
-  if (!decoded.valid) return json({ error: "invalid_code_signature" }, 409);
+  const codeValue = normalizeCodeValue(body.code_value);
+  if (isLegacySignedCode(codeValue)) {
+    const decoded = await verifyCode(codeValue, env.CODE_PUBLIC_JWK);
+    if (!decoded.valid) return json({ error: "invalid_code_signature" }, 409);
+  } else if (!isReadableCodeFormat(codeValue)) {
+    return json({ error: "invalid_code_format" }, 409);
+  }
 
-  const rec = await getCodeByValue(db, body.code_value);
+  const rec = await getCodeByValue(db, codeValue);
   if (!rec) return json({ error: "code_not_found" }, 404);
   if (rec.status === "redeemed") return json({ error: "already_redeemed" }, 409);
   if (rec.redeem_expires_at && Date.now() > Date.parse(rec.redeem_expires_at)) return json({ error: "CODE_EXPIRED" }, 409);
@@ -528,7 +534,7 @@ async function handleIssueTestCode(request, env, ctx, db) {
     payment_ref: null,
     test_code: true,
   };
-  const codeValue = await signCode(payload, env.CODE_PRIVATE_JWK);
+  const codeValue = await createReadableCodeValue(db, "1_day");
 
   await createCodeRecord(db, {
     codeId,
@@ -1094,6 +1100,41 @@ async function createCodeRedemption(db, record) {
 
 async function getCodeByValue(db, codeValue) {
   return db.prepare(`SELECT id, status, redeem_expires_at FROM codes WHERE code_value = ?`).bind(codeValue).first();
+}
+
+async function createReadableCodeValue(db, durationCode) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const codeValue = formatReadableCode(durationCode, randomCodeToken(8));
+    const existing = await db.prepare(`SELECT id FROM codes WHERE code_value = ?`).bind(codeValue).first();
+    if (!existing) return codeValue;
+  }
+  throw new Error("unable_to_allocate_unique_code");
+}
+
+function formatReadableCode(durationCode, token) {
+  const durationLabel = durationCode === "1_day" ? "1D" : durationCode === "6_months" ? "6M" : "12M";
+  return `SM-${durationLabel}-${token.slice(0, 4)}-${token.slice(4)}`;
+}
+
+function randomCodeToken(length) {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  let out = "";
+  for (let i = 0; i < length; i += 1) {
+    out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  }
+  return out;
+}
+
+function normalizeCodeValue(codeValue) {
+  return String(codeValue || "").trim().toUpperCase();
+}
+
+function isLegacySignedCode(codeValue) {
+  return codeValue.includes(".");
+}
+
+function isReadableCodeFormat(codeValue) {
+  return /^SM-(1D|6M|12M)-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(codeValue);
 }
 
 async function markCodeRedeemed(db, record) {
