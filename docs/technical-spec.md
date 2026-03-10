@@ -10,7 +10,7 @@ This document defines v1 architecture, data model, and API contract for a standa
 - Subscription code generation + activation flows.
 - One-time-use redemption codes.
 - Payment orchestration for QRIS/Card.
-- Cloudflare D1 as the primary transactional data store.
+- Cloudflare D1 for code-related persistence only.
 - Google Sheets append-only operational history (yearly file, monthly tab).
 - Basic abuse controls (rate limiting and anti-abuse checks).
 
@@ -35,8 +35,8 @@ Out of scope for this version:
    - Payment intent lifecycle and webhook reconciliation.
 
 3. **Cloudflare D1 (SQLite-compatible)**
-   - Source of truth for auth, roles, orders, codes, usage, audit, idempotency, rate-limit counters.
-   - Pricing/country/provider mapping is stored in Cloudflare Worker static config for lean operations.
+   - Source of truth for code issuance, redemption, and bulk code batches.
+   - User identity, roles, pricing, country mapping, payment state, and operational controls stay in the backend layer.
 
 4. **Google Sheets Append Service**
    - Async worker task that appends immutable transaction history rows.
@@ -51,16 +51,16 @@ Out of scope for this version:
 ## Google OAuth
 
 - Use Google OpenID Connect.
-- Store Google subject (`sub`) as immutable external identity key.
+- Store Google subject (`sub`) as immutable external identity key in the backend identity layer.
 - On first successful sign-in:
-  - Create `users` row.
+  - Create or update backend-managed user state.
   - Default role assignment = `reseller`.
 - Admin role is assigned only by existing admin (or initial seed script).
 
 ## Session model
 
 - Server-issued JWT (short-lived access token + refresh token pair).
-- Refresh token rotation with revocation table.
+- Refresh token rotation is handled in the backend layer.
 
 ## RBAC
 
@@ -191,11 +191,10 @@ Provider selection algorithm is pluggable and country-aware.
 
 ## 9) Concurrency and Data Integrity (D1)
 
-- Use explicit transactions for state transitions.
+- Use explicit transactions for code state transitions.
 - Unique constraints for business-critical invariants:
   - Unique code value.
   - Single redemption event per code.
-  - Unique idempotency key per actor/action.
 - Optimistic checks via `updated_at`/state conditions.
 
 ## 10) Operational bootstrap

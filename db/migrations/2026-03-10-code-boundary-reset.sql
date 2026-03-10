@@ -1,10 +1,16 @@
+PRAGMA foreign_keys = OFF;
+
+DROP INDEX IF EXISTS idx_codes_payment_ref;
+DROP INDEX IF EXISTS idx_code_batches_created_at;
+DROP INDEX IF EXISTS idx_codes_status_expiry;
+
+DROP TABLE IF EXISTS code_batch_items;
+DROP TABLE IF EXISTS code_redemptions;
+DROP TABLE IF EXISTS code_batches;
+DROP TABLE IF EXISTS codes;
+
 PRAGMA foreign_keys = ON;
 
--- D1 is intentionally limited to code-related persistence.
--- User identity, roles, pricing, country mapping, payment state,
--- idempotency, audit, and rate limiting are handled in the backend layer.
-
--- Issued subscription codes
 CREATE TABLE IF NOT EXISTS codes (
   id TEXT PRIMARY KEY,
   code_value TEXT NOT NULL UNIQUE,
@@ -22,7 +28,6 @@ CREATE TABLE IF NOT EXISTS codes (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
--- One-time redemption event
 CREATE TABLE IF NOT EXISTS code_redemptions (
   id TEXT PRIMARY KEY,
   code_id TEXT NOT NULL UNIQUE,
@@ -32,7 +37,6 @@ CREATE TABLE IF NOT EXISTS code_redemptions (
   FOREIGN KEY (code_id) REFERENCES codes(id)
 );
 
--- Bulk printed-card generation batches
 CREATE TABLE IF NOT EXISTS code_batches (
   id TEXT PRIMARY KEY,
   created_by_user_ref TEXT NOT NULL,
@@ -44,7 +48,6 @@ CREATE TABLE IF NOT EXISTS code_batches (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
--- Membership between batches and individual codes
 CREATE TABLE IF NOT EXISTS code_batch_items (
   batch_id TEXT NOT NULL,
   code_id TEXT NOT NULL UNIQUE,
@@ -53,7 +56,6 @@ CREATE TABLE IF NOT EXISTS code_batch_items (
   FOREIGN KEY (code_id) REFERENCES codes(id)
 );
 
--- Helpful indexes
 CREATE INDEX IF NOT EXISTS idx_codes_status_expiry ON codes(status, redeem_expires_at);
 CREATE INDEX IF NOT EXISTS idx_codes_payment_ref ON codes(payment_ref);
 CREATE INDEX IF NOT EXISTS idx_code_batches_created_at ON code_batches(created_at);
