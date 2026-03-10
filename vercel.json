@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/frontend/index.html" },
+    { "source": "/admin", "destination": "/frontend/admin/index.html" },
+    { "source": "/reseller", "destination": "/frontend/reseller/index.html" },
+    { "source": "/reseller/manifest.webmanifest", "destination": "/frontend/reseller/manifest.webmanifest" },
+    { "source": "/reseller/sw.js", "destination": "/frontend/reseller/sw.js" }
+  ]
+}

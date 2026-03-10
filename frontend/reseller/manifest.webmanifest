@@ -1,8 +1,8 @@
 {
   "name": "Reseller PWA",
   "short_name": "Reseller",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "/reseller",
+  "scope": "/reseller",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0a7",

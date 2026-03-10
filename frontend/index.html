@@ -216,10 +216,10 @@
     function routeByRole(user) {
       const roles = Array.isArray(user && user.roles) ? user.roles : [];
       if (roles.includes("admin")) {
-        window.location.href = "/frontend/admin/index.html";
+        window.location.href = "/admin";
         return;
       }
-      window.location.href = "/frontend/reseller/index.html";
+      window.location.href = "/reseller";
     }
   </script>
 </body>
