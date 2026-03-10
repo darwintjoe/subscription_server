@@ -3,53 +3,63 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Subscription Admin</title>
+  <title>Sell More Admin</title>
   <style>
     :root {
-      --bg: #f5f1e8;
-      --panel: #fffaf2;
-      --panel-soft: #f7f0e4;
+      --bg: #efe3d0;
+      --panel: rgba(255, 250, 242, 0.9);
+      --panel-strong: #fffdf9;
       --ink: #182228;
-      --muted: #617078;
+      --muted: #65737b;
       --line: rgba(24, 34, 40, 0.12);
-      --accent: #bc5a2f;
-      --accent-dark: #8f3f1d;
-      --good: #25704d;
-      --bad: #b04439;
-      --shadow: 0 16px 40px rgba(66, 42, 17, 0.10);
-      --radius: 20px;
+      --accent: #ad552d;
+      --accent-dark: #7d3b1d;
+      --good: #1d7350;
+      --bad: #b1483c;
+      --shadow: 0 22px 56px rgba(58, 39, 18, 0.14);
+      --radius: 24px;
       --font: "Segoe UI", "Helvetica Neue", sans-serif;
-      --mono: Consolas, "Courier New", monospace;
     }
 
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: linear-gradient(180deg, #f8f4ec 0%, #efe5d6 100%);
+      background:
+        radial-gradient(circle at top right, rgba(173, 85, 45, 0.18), transparent 28%),
+        linear-gradient(180deg, #f7f1e7 0%, #eadcc8 100%);
       color: var(--ink);
       font-family: var(--font);
     }
     .page {
-      width: min(760px, calc(100vw - 20px));
+      width: min(1040px, calc(100vw - 18px));
       margin: 0 auto;
-      padding: 14px 0 28px;
+      padding: 18px 0 34px;
     }
-    .card {
+    .panel {
       background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.7);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 16px;
+      padding: 18px;
+      backdrop-filter: blur(12px);
       margin-bottom: 14px;
     }
-    .hero {
-      padding-top: 20px;
-      background:
-        radial-gradient(circle at top right, rgba(188, 90, 47, 0.16), transparent 34%),
-        var(--panel);
+    .heroTop,
+    .headerRow,
+    .buttonRow,
+    .toolbarRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .titleWrap {
+      display: grid;
+      gap: 8px;
     }
     .eyebrow {
-      margin: 0 0 8px;
+      margin: 0;
       color: var(--accent-dark);
       font-size: 11px;
       font-weight: 800;
@@ -61,310 +71,300 @@
       letter-spacing: -0.03em;
     }
     h1 {
-      font-size: clamp(28px, 9vw, 42px);
+      font-size: clamp(30px, 8vw, 52px);
       line-height: 0.96;
-      margin-bottom: 10px;
     }
-    h2 { font-size: 22px; margin-bottom: 10px; }
-    h3 { font-size: 16px; margin-bottom: 8px; }
+    h2 { font-size: 22px; }
+    h3 { font-size: 16px; }
     p {
       margin: 0;
       color: var(--muted);
-      line-height: 1.5;
-    }
-    .stack { display: grid; gap: 12px; }
-    .summaryGrid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .miniStat {
-      background: var(--panel-soft);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 14px;
-    }
-    .miniStat span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-    .miniStat strong {
-      display: block;
-      font-size: 24px;
-    }
-    .toolbar {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      display: grid;
-      gap: 10px;
-      padding: 10px 0;
-      background: linear-gradient(180deg, rgba(245, 241, 232, 0.95), rgba(245, 241, 232, 0.75));
-      backdrop-filter: blur(8px);
-    }
-    .actionRow,
-    .buttonRow {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    button,
-    input,
-    select,
-    textarea {
-      font: inherit;
-    }
-    button {
-      border: 0;
-      border-radius: 999px;
-      padding: 11px 15px;
-      cursor: pointer;
-    }
-    .primary {
-      background: linear-gradient(135deg, var(--accent), #d87438);
-      color: #fff;
-    }
-    .secondary {
-      background: #fffdf8;
-      color: var(--ink);
-      border: 1px solid var(--line);
-    }
-    .danger {
-      background: linear-gradient(135deg, var(--bad), #d26747);
-      color: #fff;
-    }
-    .actionChip {
-      flex: 1 1 120px;
-      text-align: center;
+      line-height: 1.55;
     }
     .status {
+      min-height: 46px;
       padding: 12px 14px;
       border: 1px solid var(--line);
-      border-radius: 14px;
-      background: #fffdf8;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
       color: var(--muted);
       font-size: 14px;
     }
     .status.ok { color: var(--good); }
     .status.error { color: var(--bad); }
+    .summaryGrid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 14px;
+    }
+    .summaryCard {
+      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .summaryCard span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .summaryCard strong {
+      display: block;
+      font-size: 34px;
+      line-height: 1;
+    }
+    .summaryCard small {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .actionBar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      cursor: pointer;
+    }
+    .primary {
+      background: linear-gradient(135deg, var(--accent), #d0713d);
+      color: #fff;
+    }
+    .secondary {
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
+      color: var(--ink);
+    }
+    .danger {
+      background: linear-gradient(135deg, var(--bad), #d86b55);
+      color: #fff;
+    }
+    .ghost {
+      background: transparent;
+      border: 1px dashed rgba(24, 34, 40, 0.24);
+      color: var(--ink);
+    }
+    .chip {
+      flex: 1 1 160px;
+      text-align: center;
+    }
+    .remember {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .remember input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+    }
+    .toolbarRow {
+      margin-top: 14px;
+    }
+    .tableWrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel-strong);
+    }
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(24, 34, 40, 0.08);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    th {
+      background: rgba(248, 240, 228, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    th button {
+      padding: 0;
+      border: 0;
+      background: none;
+      color: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(173, 85, 45, 0.12);
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+    .grid2 {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .cardList {
+      display: grid;
+      gap: 10px;
+    }
+    .miniCard {
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+    }
     label {
       display: grid;
       gap: 6px;
       color: var(--muted);
       font-size: 14px;
     }
-    .grid2 {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .grid3 {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-    }
-    input, select, textarea {
+    input, select {
       width: 100%;
-      background: #fffdf8;
+      background: var(--panel-strong);
       border: 1px solid var(--line);
       border-radius: 14px;
       color: var(--ink);
       padding: 11px 12px;
     }
-    textarea {
-      min-height: 84px;
-      resize: vertical;
-      font-family: var(--mono);
-      font-size: 13px;
+    .hidden {
+      display: none;
     }
-    .paymentList,
-    .simpleList {
-      display: grid;
-      gap: 10px;
-    }
-    .rowItem {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 12px;
-      background: var(--panel-soft);
-    }
-    .rowTop {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      align-items: start;
-    }
-    .pill {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      background: rgba(188, 90, 47, 0.12);
-      color: var(--accent-dark);
-    }
-    .subtle {
-      color: var(--muted);
-      font-size: 13px;
-      margin-top: 6px;
-    }
-    .sectionHeader {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .marketCard {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 12px;
-      background: var(--panel-soft);
-    }
-    .tiny {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: var(--muted);
-    }
-    @media (max-width: 560px) {
+    @media (max-width: 760px) {
       .summaryGrid,
-      .grid2,
-      .grid3 {
+      .grid2 {
         grid-template-columns: 1fr;
+      }
+      .page {
+        width: min(100vw - 14px, 560px);
+      }
+      .panel {
+        padding: 16px;
+      }
+      .chip {
+        flex-basis: calc(50% - 10px);
       }
     }
   </style>
 </head>
 <body>
   <main class="page">
-    <section class="card hero">
-      <p class="eyebrow">Admin Mobile View</p>
-      <h1>Subscription dashboard</h1>
-      <p>Default view focuses on monthly activity, payment received, and quick actions for users, pricing, and codes.</p>
+    <section class="panel">
+      <div class="heroTop">
+        <div class="titleWrap">
+          <p class="eyebrow">Sell More Admin</p>
+          <h1>Code operations first.</h1>
+          <p>Default view opens directly into the code ledger, with monthly summary cards and quick access to user management, pricing, and payment reporting.</p>
+        </div>
+        <div class="buttonRow">
+          <button class="primary" id="loginBtn">Sign In</button>
+          <button class="secondary" id="refreshBtn">Refresh</button>
+          <button class="ghost" id="refreshSessionBtn">Refresh Session</button>
+          <button class="danger" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+
+      <div class="toolbarRow">
+        <label class="remember"><input id="rememberMe" type="checkbox" checked> Stay logged in on this device</label>
+        <div class="actionBar">
+          <button class="secondary chip" data-jump="users">User Management</button>
+          <button class="secondary chip" data-jump="pricing">Pricing</button>
+          <button class="secondary chip" data-jump="payments">Payment Received</button>
+        </div>
+      </div>
+
       <div class="summaryGrid" id="summaryGrid"></div>
+      <div class="status" id="status">Sign in to load live admin data.</div>
     </section>
 
-    <section class="toolbar">
-      <div class="card" style="margin-bottom:0;">
-        <div class="stack">
-          <label>API Base
-            <input id="apiBase" value="https://subscription-live.applocator.workers.dev">
-          </label>
-          <div class="buttonRow">
-            <button class="primary" id="loginBtn">Sign In with Google</button>
-            <button class="secondary" id="loadAllBtn">Reload</button>
-            <button class="secondary" id="refreshSessionBtn">Refresh Session</button>
-            <button class="danger" id="logoutBtn">Logout</button>
-          </div>
-          <div class="actionRow">
-            <button class="secondary actionChip" data-jump="users">User Management</button>
-            <button class="secondary actionChip" data-jump="pricing">Pricing</button>
-            <button class="secondary actionChip" data-jump="codes">Code Management</button>
-          </div>
-          <div class="status" id="status">Ready.</div>
+    <section class="panel">
+      <div class="headerRow">
+        <div>
+          <p class="eyebrow">Default View</p>
+          <h2>Code list</h2>
+          <p>Sorted by created timestamp descending by default.</p>
         </div>
       </div>
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th><button data-sort="code">Code</button></th>
+              <th><button data-sort="created_by">Created By</button></th>
+              <th><button data-sort="country">Country</button></th>
+              <th><button data-sort="created_at">Created Timestamp</button></th>
+              <th><button data-sort="redeemed_at">Redeemed Timestamp</button></th>
+            </tr>
+          </thead>
+          <tbody id="codesTable"></tbody>
+        </table>
+      </div>
     </section>
 
-    <section class="card" id="dashboard">
-      <div class="sectionHeader">
+    <section class="panel" id="payments">
+      <div class="headerRow">
         <div>
-          <h2>Dashboard</h2>
-          <p>Code totals, this month progress, and payment received by method this month.</p>
+          <p class="eyebrow">Payment Received</p>
+          <h2>This month</h2>
         </div>
-        <button class="secondary" id="meBtn">Who Am I</button>
       </div>
-      <div class="paymentList" id="paymentSummary"></div>
-      <div class="card" style="margin:10px 0 0; box-shadow:none; background:#fffdf8;">
-        <h3>Current Session</h3>
-        <pre id="authOut"></pre>
-      </div>
+      <div class="cardList" id="paymentList"></div>
     </section>
 
-    <section class="card" id="users">
-      <h2>User Management</h2>
-      <p>First registered user becomes admin. All next users default to reseller until promoted.</p>
-      <div class="simpleList" id="usersList"></div>
-    </section>
-
-    <section class="card" id="pricing">
-      <div class="sectionHeader">
+    <section class="panel" id="users">
+      <div class="headerRow">
         <div>
-          <h2>Pricing Management</h2>
-          <p>Default subscription periods are 6 and 12 months for 5 countries plus USD fallback.</p>
+          <p class="eyebrow">User Management</p>
+          <h2>Roles and access</h2>
+        </div>
+      </div>
+      <div class="cardList" id="usersList"></div>
+    </section>
+
+    <section class="panel" id="pricing">
+      <div class="headerRow">
+        <div>
+          <p class="eyebrow">Pricing</p>
+          <h2>Localized pricing setup</h2>
         </div>
         <button class="primary" id="savePricingBtn">Save Pricing</button>
       </div>
       <div class="grid2" id="pricingMarkets"></div>
-      <div class="card" style="margin:12px 0 0; box-shadow:none; background:#fffdf8;">
-        <h3>Payment Setup</h3>
-        <div class="grid2">
-          <label>QRIS provider
-            <input id="qrisProvider" value="xendit">
-          </label>
-          <label>Card provider
-            <input id="cardProvider" value="stripe">
-          </label>
-          <label>QRIS enabled
-            <select id="qrisEnabled"><option value="true">true</option><option value="false">false</option></select>
-          </label>
-          <label>Card enabled
-            <select id="cardEnabled"><option value="true">true</option><option value="false">false</option></select>
-          </label>
-        </div>
-      </div>
-    </section>
-
-    <section class="card" id="codes">
-      <div class="sectionHeader">
-        <div>
-          <h2>Code Management</h2>
-          <p>List current codes and create manual code batches. Quantity defaults to 10 or 100, but remains editable.</p>
-        </div>
-      </div>
-      <div class="card" style="margin-top:0; box-shadow:none; background:#fffdf8;">
-        <h3>Manual Code Generation</h3>
-        <div class="grid3">
-          <label>Duration
-            <select id="batchDuration">
-              <option value="6_months">6 months</option>
-              <option value="12_months" selected>12 months</option>
-            </select>
-          </label>
-          <label>Quick Qty
-            <select id="batchQuickQty">
-              <option value="10" selected>10</option>
-              <option value="100">100</option>
-            </select>
-          </label>
-          <label>Editable Qty
-            <input id="batchQty" type="number" min="1" value="10">
-          </label>
-        </div>
-        <label>Notes
-          <textarea id="batchNotes" placeholder="Optional batch notes"></textarea>
-        </label>
-        <div class="buttonRow">
-          <button class="primary" id="generateBatchBtn">Generate Batch</button>
-          <button class="secondary" id="reloadCodesBtn">Reload Codes</button>
-        </div>
-      </div>
-      <div class="simpleList" id="codesList" style="margin-top:12px;"></div>
     </section>
   </main>
 
   <script>
+    const API_BASE = "https://subscription-live.applocator.workers.dev";
     const storage = {
       access: "admin_access_token",
       refresh: "admin_refresh_token",
+      remember: "admin_remember_me",
     };
     const DEFAULT_MARKETS = [
       { code: "ID", label: "Indonesia" },
@@ -375,41 +375,30 @@
       { code: "fallback", label: "Fallback USD" },
     ];
     const DURATIONS = ["6_months", "12_months"];
+
     const state = {
       config: null,
       users: [],
       orders: [],
       codes: [],
+      sort: { key: "created_at", direction: "desc" },
     };
 
     const el = {
-      apiBase: document.getElementById("apiBase"),
-      status: document.getElementById("status"),
-      authOut: document.getElementById("authOut"),
       summaryGrid: document.getElementById("summaryGrid"),
-      paymentSummary: document.getElementById("paymentSummary"),
+      status: document.getElementById("status"),
+      codesTable: document.getElementById("codesTable"),
+      paymentList: document.getElementById("paymentList"),
       usersList: document.getElementById("usersList"),
       pricingMarkets: document.getElementById("pricingMarkets"),
-      qrisProvider: document.getElementById("qrisProvider"),
-      cardProvider: document.getElementById("cardProvider"),
-      qrisEnabled: document.getElementById("qrisEnabled"),
-      cardEnabled: document.getElementById("cardEnabled"),
-      batchDuration: document.getElementById("batchDuration"),
-      batchQuickQty: document.getElementById("batchQuickQty"),
-      batchQty: document.getElementById("batchQty"),
-      batchNotes: document.getElementById("batchNotes"),
-      codesList: document.getElementById("codesList"),
     };
 
     document.getElementById("loginBtn").onclick = login;
-    document.getElementById("loadAllBtn").onclick = loadAll;
+    document.getElementById("refreshBtn").onclick = loadAll;
     document.getElementById("refreshSessionBtn").onclick = refreshSession;
     document.getElementById("logoutBtn").onclick = logout;
-    document.getElementById("meBtn").onclick = loadMe;
     document.getElementById("savePricingBtn").onclick = savePricing;
-    document.getElementById("reloadCodesBtn").onclick = loadCodes;
-    document.getElementById("generateBatchBtn").onclick = generateBatch;
-    el.batchQuickQty.onchange = () => { el.batchQty.value = el.batchQuickQty.value; };
+
     document.querySelectorAll("[data-jump]").forEach((button) => {
       button.onclick = () => {
         const target = document.getElementById(button.getAttribute("data-jump"));
@@ -417,23 +406,21 @@
       };
     });
 
+    document.querySelectorAll("[data-sort]").forEach((button) => {
+      button.onclick = () => setSort(button.getAttribute("data-sort"));
+    });
+
+    hydrateRememberPreference();
     consumeOauthResult();
-    loadAll();
-
-    function token() {
-      return localStorage.getItem(storage.access) || "";
-    }
-
-    function base() {
-      return el.apiBase.value.replace(/\/$/, "");
-    }
+    autoResume();
 
     async function api(path, method = "GET", body) {
-      const response = await fetch(base() + path, {
+      const token = getToken(storage.access);
+      const response = await fetch(API_BASE + path, {
         method,
         headers: {
           "content-type": "application/json",
-          ...(token() ? { authorization: "Bearer " + token() } : {}),
+          ...(token ? { authorization: "Bearer " + token } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -450,38 +437,41 @@
     }
 
     function login() {
+      persistRememberPreference();
       const redirectUrl = window.location.href.split("#")[0];
-      window.location.href = `${base()}/v1/auth/google/start?redirect_url=${encodeURIComponent(redirectUrl)}`;
+      window.location.href = `${API_BASE}/v1/auth/google/start?redirect_url=${encodeURIComponent(redirectUrl)}`;
+    }
+
+    async function autoResume() {
+      if (!getToken(storage.access)) return;
+      await loadAll();
     }
 
     async function refreshSession() {
       try {
-        const refresh = localStorage.getItem(storage.refresh);
+        const refresh = getToken(storage.refresh);
         if (!refresh) throw new Error("No refresh token found.");
         const data = await api("/v1/auth/refresh", "POST", { refresh_token: refresh });
-        localStorage.setItem(storage.access, data.access_token);
-        localStorage.setItem(storage.refresh, data.refresh_token);
-        el.authOut.textContent = JSON.stringify(data, null, 2);
+        setTokenPair(data.access_token, data.refresh_token);
         setStatus("Session refreshed.", "ok");
+        await loadAll();
       } catch (error) {
         setStatus("Refresh failed: " + error.message, "error");
-      }
-    }
-
-    async function loadMe() {
-      try {
-        const data = await api("/v1/me");
-        el.authOut.textContent = JSON.stringify(data, null, 2);
-        setStatus("Current user loaded.", "ok");
-      } catch (error) {
-        setStatus("Unable to load current user: " + error.message, "error");
       }
     }
 
     function logout() {
       localStorage.removeItem(storage.access);
       localStorage.removeItem(storage.refresh);
-      el.authOut.textContent = "";
+      sessionStorage.removeItem(storage.access);
+      sessionStorage.removeItem(storage.refresh);
+      state.users = [];
+      state.orders = [];
+      state.codes = [];
+      renderSummary();
+      renderCodes();
+      renderPayments();
+      renderUsers();
       setStatus("Session cleared.", "ok");
     }
 
@@ -492,67 +482,203 @@
       const accessToken = params.get("access_token");
       const refreshToken = params.get("refresh_token");
       const error = params.get("error");
-      const userRaw = params.get("user");
       if (error) {
         setStatus("Google OAuth failed: " + error, "error");
         history.replaceState(null, "", window.location.pathname + window.location.search);
         return;
       }
-      if (accessToken && refreshToken) {
-        localStorage.setItem(storage.access, accessToken);
-        localStorage.setItem(storage.refresh, refreshToken);
-        if (userRaw) {
-          try {
-            el.authOut.textContent = JSON.stringify({ user: JSON.parse(userRaw) }, null, 2);
-          } catch (parseError) {
-            el.authOut.textContent = userRaw;
-          }
-        }
-        setStatus("Google OAuth login completed.", "ok");
-        history.replaceState(null, "", window.location.pathname + window.location.search);
-      }
+      if (!accessToken || !refreshToken) return;
+      setTokenPair(accessToken, refreshToken);
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      setStatus("Google OAuth login completed.", "ok");
+      loadAll();
     }
 
     async function loadAll() {
-      await Promise.allSettled([loadMe(), loadConfig(), loadUsers(), loadOrders(), loadCodes()]);
-      renderDashboard();
+      try {
+        const [configData, usersData, ordersData, codesData] = await Promise.all([
+          api("/v1/admin/config"),
+          api("/v1/admin/users"),
+          api("/v1/admin/orders"),
+          api("/v1/admin/codes"),
+        ]);
+        state.config = configData.config;
+        state.users = usersData.users || [];
+        state.orders = ordersData.orders || [];
+        state.codes = codesData.codes || [];
+        renderSummary();
+        renderCodes();
+        renderPayments();
+        renderUsers();
+        renderPricing();
+        setStatus("Admin data loaded.", "ok");
+      } catch (error) {
+        setStatus("Unable to load admin data: " + error.message, "error");
+      }
     }
 
-    async function loadConfig() {
-      try {
-        const data = await api("/v1/admin/config");
-        state.config = data.config;
-        renderPricing();
-      } catch (error) {
-        setStatus("Config load failed: " + error.message, "error");
+    function renderSummary() {
+      const now = new Date();
+      const sameMonth = (value) => {
+        if (!value) return false;
+        const date = new Date(value);
+        return date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() === now.getUTCMonth();
+      };
+
+      const generatedTotal = state.codes.length;
+      const generatedMonth = state.codes.filter((item) => sameMonth(item.created_at)).length;
+      const redeemedTotal = state.codes.filter((item) => item.status === "redeemed").length;
+      const redeemedMonth = state.codes.filter((item) => sameMonth(item.redeemed_at)).length;
+      const paidThisMonth = state.orders
+        .filter((item) => item.status === "paid" && sameMonth(item.paid_at || item.created_at))
+        .reduce((sum, item) => sum + Number(item.amount_minor || 0), 0);
+
+      el.summaryGrid.innerHTML = [
+        summaryCard("Code Generated", generatedMonth, `of ${generatedTotal} total`),
+        summaryCard("Code Redeemed", redeemedMonth, `of ${redeemedTotal} total`),
+        summaryCard("Payment Received", formatMinor(paidThisMonth), "this month"),
+      ].join("");
+    }
+
+    function summaryCard(label, value, detail) {
+      return `<div class="summaryCard"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(detail)}</small></div>`;
+    }
+
+    function renderCodes() {
+      const rows = [...state.codes].sort(compareCodes);
+      el.codesTable.innerHTML = rows.map((row) => `
+        <tr>
+          <td><strong>${escapeHtml(shortCode(row.code_value || row.id || "-"))}</strong><div class="muted">${escapeHtml(row.status || "-")}</div></td>
+          <td>${escapeHtml(creatorLabel(row))}</td>
+          <td>${escapeHtml((row.country_code || "-").toUpperCase())}</td>
+          <td>${escapeHtml(formatDate(row.created_at))}</td>
+          <td>${escapeHtml(formatDate(row.redeemed_at))}</td>
+        </tr>
+      `).join("");
+    }
+
+    function compareCodes(a, b) {
+      const key = state.sort.key;
+      const direction = state.sort.direction === "asc" ? 1 : -1;
+      const av = sortableValue(a, key);
+      const bv = sortableValue(b, key);
+      if (av < bv) return -1 * direction;
+      if (av > bv) return 1 * direction;
+      return 0;
+    }
+
+    function sortableValue(row, key) {
+      if (key === "code") return String(row.code_value || row.id || "");
+      if (key === "created_by") return creatorLabel(row).toLowerCase();
+      if (key === "country") return String(row.country_code || "");
+      if (key === "redeemed_at") return String(row.redeemed_at || "");
+      return String(row.created_at || "");
+    }
+
+    function setSort(key) {
+      if (state.sort.key === key) {
+        state.sort.direction = state.sort.direction === "desc" ? "asc" : "desc";
+      } else {
+        state.sort.key = key;
+        state.sort.direction = key === "created_at" ? "desc" : "asc";
       }
+      renderCodes();
+    }
+
+    function creatorLabel(row) {
+      if (String(row.channel || "").toLowerCase() === "api") return "API";
+      return row.actor_email || row.created_by || "Reseller";
+    }
+
+    function shortCode(codeValue) {
+      const value = String(codeValue || "");
+      if (value.length <= 18) return value;
+      return `${value.slice(0, 8)}...${value.slice(-4)}`;
+    }
+
+    function renderPayments() {
+      const now = new Date();
+      const sameMonth = (value) => {
+        if (!value) return false;
+        const date = new Date(value);
+        return date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() === now.getUTCMonth();
+      };
+      const totals = { qris: 0, card: 0 };
+      state.orders
+        .filter((item) => item.status === "paid" && sameMonth(item.paid_at || item.created_at))
+        .forEach((item) => {
+          const key = item.payment_method === "card" ? "card" : "qris";
+          totals[key] += Number(item.amount_minor || 0);
+        });
+      el.paymentList.innerHTML = [
+        paymentCard("QRIS", totals.qris),
+        paymentCard("Card", totals.card),
+      ].join("");
+    }
+
+    function paymentCard(label, amount) {
+      return `<div class="miniCard"><h3>${escapeHtml(label)}</h3><p>${escapeHtml(formatMinor(amount))}</p></div>`;
+    }
+
+    function renderUsers() {
+      el.usersList.innerHTML = state.users.map((user) => `
+        <div class="miniCard">
+          <div class="headerRow">
+            <div>
+              <h3>${escapeHtml(user.display_name || user.email)}</h3>
+              <p>${escapeHtml(user.email || "")}</p>
+            </div>
+            <span class="pill">${escapeHtml((user.roles || []).join(", "))}</span>
+          </div>
+          <div class="grid2" style="margin-top:12px;">
+            <label>Role
+              <select data-user-role="${user.id}">
+                <option value="reseller" ${user.roles.includes("reseller") && !user.roles.includes("admin") ? "selected" : ""}>reseller</option>
+                <option value="admin,reseller" ${user.roles.includes("admin") ? "selected" : ""}>admin + reseller</option>
+              </select>
+            </label>
+            <div class="buttonRow" style="align-items:end;">
+              <button class="secondary" data-save-user="${user.id}">Save</button>
+            </div>
+          </div>
+        </div>
+      `).join("");
+
+      document.querySelectorAll("[data-save-user]").forEach((button) => {
+        button.onclick = async () => {
+          const userId = button.getAttribute("data-save-user");
+          const select = document.querySelector(`[data-user-role="${userId}"]`);
+          try {
+            await api(`/v1/admin/users/${userId}/roles`, "PUT", { roles: select.value.split(",") });
+            setStatus("User role updated.", "ok");
+            await loadAll();
+          } catch (error) {
+            setStatus("Role update failed: " + error.message, "error");
+          }
+        };
+      });
     }
 
     function renderPricing() {
       if (!state.config) return;
-      el.qrisProvider.value = state.config.payment_methods.qris.provider;
-      el.cardProvider.value = state.config.payment_methods.card.provider;
-      el.qrisEnabled.value = String(Boolean(state.config.payment_methods.qris.enabled));
-      el.cardEnabled.value = String(Boolean(state.config.payment_methods.card.enabled));
-
       el.pricingMarkets.innerHTML = DEFAULT_MARKETS.map((market) => {
         const pricing = state.config.pricing[market.code] || state.config.pricing.fallback;
         return `
-          <div class="marketCard">
-            <h3>${escapeHtml(market.label)}</h3>
-            <p class="tiny">${escapeHtml(market.code)}</p>
-            <div class="grid2" style="margin-top:10px;">
-              ${DURATIONS.map((duration) => `
-                <div>
-                  <label>${duration === "6_months" ? "6 months" : "12 months"} currency
-                    <input data-market="${market.code}" data-duration="${duration}" data-field="currency" value="${escapeHtml(pricing[duration].currency)}" maxlength="3">
-                  </label>
-                  <label>${duration === "6_months" ? "6 months" : "12 months"} amount
-                    <input data-market="${market.code}" data-duration="${duration}" data-field="amount_minor" type="number" min="0" value="${Number(pricing[duration].amount_minor)}">
-                  </label>
-                </div>
-              `).join("")}
+          <div class="miniCard stack">
+            <div>
+              <h3>${escapeHtml(market.label)}</h3>
+              <p>${escapeHtml(market.code)}</p>
             </div>
+            ${DURATIONS.map((duration) => `
+              <div class="grid2">
+                <label>${duration === "6_months" ? "6 months" : "12 months"} currency
+                  <input data-market="${market.code}" data-duration="${duration}" data-field="currency" value="${escapeHtml(pricing[duration].currency)}" maxlength="3">
+                </label>
+                <label>${duration === "6_months" ? "6 months" : "12 months"} amount
+                  <input data-market="${market.code}" data-duration="${duration}" data-field="amount_minor" type="number" min="0" value="${Number(pricing[duration].amount_minor)}">
+                </label>
+              </div>
+            `).join("")}
           </div>
         `;
       }).join("");
@@ -574,10 +700,7 @@
 
         const payload = {
           pricing,
-          payment_methods: {
-            qris: { enabled: el.qrisEnabled.value === "true", provider: el.qrisProvider.value.trim() },
-            card: { enabled: el.cardEnabled.value === "true", provider: el.cardProvider.value.trim() },
-          },
+          payment_methods: state.config.payment_methods,
           google_oauth_mode: state.config.google_oauth_mode,
           onboarding_rule: state.config.onboarding_rule,
           sheet_backup_enabled: state.config.sheet_backup_enabled,
@@ -589,163 +712,21 @@
         const data = await api("/v1/admin/config", "PUT", payload);
         state.config = data.config;
         renderPricing();
-        setStatus("Pricing and payment setup saved.", "ok");
+        setStatus("Pricing updated.", "ok");
       } catch (error) {
         setStatus("Save pricing failed: " + error.message, "error");
       }
     }
 
-    async function loadUsers() {
-      try {
-        const data = await api("/v1/admin/users");
-        state.users = data.users || [];
-        renderUsers();
-      } catch (error) {
-        state.users = [];
-        el.usersList.innerHTML = "";
-      }
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "-";
+      return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     }
 
-    function renderUsers() {
-      el.usersList.innerHTML = state.users.map((user) => `
-        <div class="rowItem">
-          <div class="rowTop">
-            <div>
-              <strong>${escapeHtml(user.email)}</strong>
-              <div class="subtle">${escapeHtml(user.display_name || "")}</div>
-            </div>
-            <span class="pill">${escapeHtml(user.roles.join(", "))}</span>
-          </div>
-          <div class="grid2" style="margin-top:10px;">
-            <label>Role
-              <select data-user-role="${user.id}">
-                <option value="reseller" ${user.roles.includes("reseller") && !user.roles.includes("admin") ? "selected" : ""}>reseller</option>
-                <option value="admin,reseller" ${user.roles.includes("admin") ? "selected" : ""}>admin + reseller</option>
-              </select>
-            </label>
-            <div class="buttonRow" style="align-items:end;">
-              <button class="secondary" data-save-user="${user.id}">Save</button>
-            </div>
-          </div>
-        </div>
-      `).join("");
-
-      document.querySelectorAll("[data-save-user]").forEach((button) => {
-        button.onclick = async () => {
-          const userId = button.getAttribute("data-save-user");
-          const select = document.querySelector(`[data-user-role="${userId}"]`);
-          try {
-            await api(`/v1/admin/users/${userId}/roles`, "PUT", { roles: select.value.split(",") });
-            setStatus("User role updated.", "ok");
-            await loadUsers();
-            renderDashboard();
-          } catch (error) {
-            setStatus("Role update failed: " + error.message, "error");
-          }
-        };
-      });
-    }
-
-    async function loadOrders() {
-      try {
-        const data = await api("/v1/admin/orders");
-        state.orders = data.orders || [];
-        renderDashboard();
-      } catch (error) {
-        state.orders = [];
-      }
-    }
-
-    async function loadCodes() {
-      try {
-        const data = await api("/v1/admin/codes");
-        state.codes = data.codes || [];
-        renderCodes();
-        renderDashboard();
-      } catch (error) {
-        state.codes = [];
-        el.codesList.innerHTML = "";
-      }
-    }
-
-    function renderCodes() {
-      el.codesList.innerHTML = state.codes.map((code) => `
-        <div class="rowItem">
-          <div class="rowTop">
-            <div>
-              <strong>${escapeHtml(code.id)}</strong>
-              <div class="subtle">${escapeHtml(code.flow_type)} / ${escapeHtml(code.duration_code)}</div>
-            </div>
-            <span class="pill">${escapeHtml(code.status)}</span>
-          </div>
-          <div class="subtle">Order: ${escapeHtml(code.order_id || "-")}</div>
-          <div class="subtle">Client: ${escapeHtml(code.channel || "-")} / ${escapeHtml(code.actor_email || "-")}</div>
-          <div class="subtle">Amount: ${escapeHtml(code.currency || "-")} ${code.amount_minor == null ? "-" : code.amount_minor}</div>
-          <div class="subtle">Redeem window: ${escapeHtml(code.redeem_expires_at || "-")}</div>
-          <div class="subtle">Created: ${escapeHtml(code.created_at || "-")}</div>
-        </div>
-      `).join("");
-    }
-
-    async function generateBatch() {
-      try {
-        const quantity = Number(el.batchQty.value || 0);
-        if (!Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity must be at least 1.");
-        const data = await api("/v1/admin/code-batches", "POST", {
-          quantity,
-          duration_code: el.batchDuration.value,
-          expiry_policy: "fixed_12_months",
-          notes: el.batchNotes.value.trim(),
-        });
-        setStatus(`Manual code batch created: ${data.id}`, "ok");
-      } catch (error) {
-        setStatus("Batch generation failed: " + error.message, "error");
-      }
-    }
-
-    function renderDashboard() {
-      const now = new Date();
-      const sameMonth = (dateString) => {
-        if (!dateString) return false;
-        const date = new Date(dateString);
-        return date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() === now.getUTCMonth();
-      };
-
-      const codesGeneratedTotal = state.codes.length;
-      const codesGeneratedMonth = state.codes.filter((code) => sameMonth(code.created_at)).length;
-      const codesRedeemedTotal = state.codes.filter((code) => code.status === "redeemed").length;
-      const codesRedeemedMonth = state.codes.filter((code) => sameMonth(code.redeemed_at)).length;
-
-      const monthlyPayments = {
-        qris: 0,
-        card: 0,
-      };
-      state.orders
-        .filter((order) => order.status === "paid" && sameMonth(order.paid_at || order.created_at))
-        .forEach((order) => {
-          const key = order.payment_method === "card" ? "card" : "qris";
-          monthlyPayments[key] += Number(order.amount_minor || 0);
-        });
-
-      el.summaryGrid.innerHTML = [
-        summaryCard("Codes Generated", `${codesGeneratedTotal}`, `This month ${codesGeneratedMonth}`),
-        summaryCard("Codes Redeemed", `${codesRedeemedTotal}`, `This month ${codesRedeemedMonth}`),
-        summaryCard("QRIS Received", `${monthlyPayments.qris}`, "This month"),
-        summaryCard("Card Received", `${monthlyPayments.card}`, "This month"),
-      ].join("");
-
-      el.paymentSummary.innerHTML = [
-        paymentItem("QRIS", monthlyPayments.qris),
-        paymentItem("Card", monthlyPayments.card),
-      ].join("");
-    }
-
-    function summaryCard(label, value, sub) {
-      return `<div class="miniStat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><div class="subtle">${escapeHtml(sub)}</div></div>`;
-    }
-
-    function paymentItem(label, amount) {
-      return `<div class="rowItem"><div class="rowTop"><strong>${escapeHtml(label)}</strong><strong>${escapeHtml(String(amount))}</strong></div><div class="subtle">Payment received this month</div></div>`;
+    function formatMinor(value) {
+      return new Intl.NumberFormat(undefined).format(Number(value || 0));
     }
 
     function escapeHtml(value) {
@@ -754,6 +735,31 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    function hydrateRememberPreference() {
+      document.getElementById("rememberMe").checked = getRememberPreference();
+    }
+
+    function getRememberPreference() {
+      return localStorage.getItem(storage.remember) !== "0";
+    }
+
+    function persistRememberPreference() {
+      localStorage.setItem(storage.remember, document.getElementById("rememberMe").checked ? "1" : "0");
+    }
+
+    function getToken(key) {
+      return localStorage.getItem(key) || sessionStorage.getItem(key) || "";
+    }
+
+    function setTokenPair(accessToken, refreshToken) {
+      const target = getRememberPreference() ? localStorage : sessionStorage;
+      const other = target === localStorage ? sessionStorage : localStorage;
+      target.setItem(storage.access, accessToken);
+      target.setItem(storage.refresh, refreshToken);
+      other.removeItem(storage.access);
+      other.removeItem(storage.refresh);
     }
   </script>
 </body>

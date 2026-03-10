@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Subscription Login</title>
+  <title>Sell More Subscription</title>
   <style>
     :root {
-      --bg: #f6f1e7;
-      --panel: #fffaf2;
+      --bg: #efe4d3;
+      --panel: rgba(255, 251, 244, 0.88);
       --ink: #172126;
-      --muted: #627178;
+      --muted: #607077;
       --line: rgba(23, 33, 38, 0.12);
-      --accent: #1f7f5c;
-      --accent-dark: #176348;
-      --shadow: 0 20px 48px rgba(59, 40, 18, 0.12);
-      --radius: 24px;
+      --accent: #0f7c63;
+      --accent-dark: #0b5f4c;
+      --shadow: 0 24px 60px rgba(60, 38, 16, 0.16);
+      --radius: 28px;
       --font: "Segoe UI", "Helvetica Neue", sans-serif;
     }
 
@@ -22,131 +22,234 @@
     body {
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 16px;
       background:
-        radial-gradient(circle at top right, rgba(31, 127, 92, 0.16), transparent 26%),
-        linear-gradient(180deg, #faf6ee 0%, #eee3d2 100%);
+        radial-gradient(circle at top right, rgba(15, 124, 99, 0.24), transparent 26%),
+        radial-gradient(circle at bottom left, rgba(203, 124, 57, 0.18), transparent 24%),
+        linear-gradient(180deg, #f8f1e8 0%, #e8dac6 100%);
       color: var(--ink);
       font-family: var(--font);
     }
-    .shell {
-      width: min(460px, 100%);
+    .page {
+      width: min(1080px, calc(100vw - 28px));
+      margin: 0 auto;
+      padding: 28px 0 34px;
+    }
+    .hero {
+      display: grid;
+      gap: 18px;
       background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.7);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 22px;
+      padding: 24px;
+      backdrop-filter: blur(12px);
+    }
+    .brandRow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .badge {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.84);
+    }
+    .badge img {
+      width: 28px;
+      height: 28px;
     }
     .eyebrow {
-      margin: 0 0 8px;
-      color: var(--accent-dark);
+      margin: 0 0 6px;
       font-size: 11px;
-      font-weight: 800;
       letter-spacing: 0.18em;
       text-transform: uppercase;
+      color: var(--accent-dark);
+      font-weight: 800;
     }
     h1 {
-      margin: 0 0 10px;
-      font-size: clamp(30px, 9vw, 42px);
-      line-height: 0.96;
-      letter-spacing: -0.03em;
+      margin: 0;
+      font-size: clamp(34px, 9vw, 64px);
+      line-height: 0.94;
+      letter-spacing: -0.04em;
     }
     p {
       margin: 0;
       color: var(--muted);
-      line-height: 1.5;
+      line-height: 1.55;
     }
-    .stack {
+    .split {
+      display: grid;
+      gap: 16px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 24px;
+      padding: 18px;
+    }
+    .statGrid {
       display: grid;
       gap: 12px;
-      margin-top: 18px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
-    label {
-      display: grid;
-      gap: 6px;
+    .stat strong {
+      display: block;
+      font-size: 24px;
+      margin-bottom: 6px;
+    }
+    .stat span {
+      display: block;
       color: var(--muted);
+      font-size: 13px;
+    }
+    .ctaStack {
+      display: grid;
+      gap: 12px;
+    }
+    .remember {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       font-size: 14px;
-    }
-    input, button, pre {
-      font: inherit;
-    }
-    input {
-      width: 100%;
-      padding: 12px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: #fffef9;
       color: var(--ink);
+    }
+    .remember input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
     }
     button {
       border: 0;
       border-radius: 999px;
-      padding: 12px 16px;
+      padding: 14px 18px;
       cursor: pointer;
+      font: inherit;
     }
     .primary {
-      background: linear-gradient(135deg, var(--accent), #2d9a71);
+      background: linear-gradient(135deg, var(--accent), #19a07d);
       color: #fff;
+      flex: 1 1 220px;
     }
     .secondary {
-      background: #fffef9;
-      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.84);
       color: var(--ink);
+      border: 1px solid var(--line);
+      flex: 1 1 160px;
     }
     .status {
+      min-height: 48px;
       padding: 12px 14px;
-      border-radius: 14px;
+      border-radius: 16px;
       border: 1px solid var(--line);
-      background: #fffef9;
+      background: rgba(255, 255, 255, 0.72);
       color: var(--muted);
       font-size: 14px;
     }
     .status.ok { color: var(--accent-dark); }
     .status.error { color: #b24c39; }
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: var(--muted);
+    .tiny {
       font-size: 12px;
+      color: var(--muted);
+    }
+    @media (min-width: 860px) {
+      .split {
+        grid-template-columns: 1.1fr 0.9fr;
+        align-items: stretch;
+      }
+    }
+    @media (max-width: 640px) {
+      .page {
+        width: min(100vw - 18px, 460px);
+        padding-top: 18px;
+      }
+      .statGrid {
+        grid-template-columns: 1fr;
+      }
+      .hero {
+        padding: 20px;
+      }
+      .primary,
+      .secondary {
+        flex-basis: 100%;
+      }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <p class="eyebrow">Subscription Access</p>
-    <h1>Sign in and route by role</h1>
-    <p>Admin users will be sent to the admin console. Reseller users will be sent to the reseller page after login.</p>
+  <main class="page">
+    <section class="hero">
+      <div class="brandRow">
+        <a class="badge" href="https://sellmore-seven.vercel.app" target="_blank" rel="noreferrer">
+          <img src="https://sellmore-seven.vercel.app/favicon.ico" alt="Sell More logo">
+        </a>
+        <div>
+          <p class="eyebrow">Sell More Subscription</p>
+          <p>Google sign-in routes every account to the correct workspace automatically.</p>
+        </div>
+      </div>
 
-    <section class="stack">
-      <label>API Base
-        <input id="apiBase" value="https://subscription-live.applocator.workers.dev">
-      </label>
-      <button class="primary" id="loginBtn">Sign In with Google</button>
-      <button class="secondary" id="meBtn">Check Current Session</button>
-      <div class="status" id="status">Ready.</div>
-      <pre id="out"></pre>
+      <div class="split">
+        <div class="ctaStack">
+          <div>
+            <h1>One sign in.<br>Right workspace.</h1>
+            <p>Admin users are directed to operations. Reseller users are directed to the mobile sales flow. Access is managed entirely through Google OAuth.</p>
+          </div>
+          <label class="remember"><input id="rememberMe" type="checkbox" checked> Stay logged in on this device</label>
+          <div class="actions">
+            <button class="primary" id="loginBtn">Continue with Google</button>
+            <button class="secondary" id="continueBtn">Continue Existing Session</button>
+          </div>
+          <div class="status" id="status">Ready.</div>
+          <div class="tiny">Need operational diagnostics? Open <a href="/frontend/debug.html">/frontend/debug.html</a>.</div>
+        </div>
+
+        <div class="card">
+          <p class="eyebrow">What Happens Next</p>
+          <div class="statGrid">
+            <div class="stat">
+              <strong>Admin</strong>
+              <span>Code operations, pricing control, and payment reporting.</span>
+            </div>
+            <div class="stat">
+              <strong>Reseller</strong>
+              <span>Country-based pricing, QRIS or card checkout, and instant code delivery.</span>
+            </div>
+            <div class="stat">
+              <strong>Google Only</strong>
+              <span>No local password flow. Role assignment and routing happen after OAuth.</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
   <script>
+    const API_BASE = "https://subscription-live.applocator.workers.dev";
     const storage = {
       access: "admin_access_token",
       refresh: "admin_refresh_token",
+      remember: "admin_remember_me",
     };
 
     const $ = (id) => document.getElementById(id);
 
     $("loginBtn").onclick = login;
-    $("meBtn").onclick = checkSession;
+    $("continueBtn").onclick = continueSession;
 
+    hydrateRememberPreference();
     consumeOauthResult();
-
-    function base() {
-      return $("apiBase").value.replace(/\/$/, "");
-    }
+    autoResume();
 
     function setStatus(message, tone) {
       $("status").textContent = message;
@@ -154,11 +257,12 @@
     }
 
     async function api(path, method = "GET", body) {
-      const response = await fetch(base() + path, {
+      const token = getToken(storage.access);
+      const response = await fetch(API_BASE + path, {
         method,
         headers: {
           "content-type": "application/json",
-          ...(localStorage.getItem(storage.access) ? { authorization: "Bearer " + localStorage.getItem(storage.access) } : {}),
+          ...(token ? { authorization: "Bearer " + token } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -170,17 +274,27 @@
     }
 
     function login() {
+      persistRememberPreference();
       const redirectUrl = window.location.href.split("#")[0];
-      window.location.href = `${base()}/v1/auth/google/start?redirect_url=${encodeURIComponent(redirectUrl)}`;
+      window.location.href = `${API_BASE}/v1/auth/google/start?redirect_url=${encodeURIComponent(redirectUrl)}`;
     }
 
-    async function checkSession() {
+    async function continueSession() {
       try {
         const data = await api("/v1/me");
-        $("out").textContent = JSON.stringify(data, null, 2);
         routeByRole(data.user);
       } catch (error) {
-        setStatus("Session check failed: " + error.message, "error");
+        setStatus("No active session found. Please sign in with Google.", "error");
+      }
+    }
+
+    async function autoResume() {
+      if (!getToken(storage.access)) return;
+      try {
+        const data = await api("/v1/me");
+        routeByRole(data.user);
+      } catch (error) {
+        setStatus("Saved session expired. Sign in again to continue.", "error");
       }
     }
 
@@ -198,28 +312,43 @@
         return;
       }
       if (!accessToken || !refreshToken) return;
-
-      localStorage.setItem(storage.access, accessToken);
-      localStorage.setItem(storage.refresh, refreshToken);
-
+      setTokenPair(accessToken, refreshToken);
+      history.replaceState(null, "", window.location.pathname + window.location.search);
       try {
-        const user = JSON.parse(userRaw || "{}");
-        $("out").textContent = JSON.stringify({ user }, null, 2);
-        setStatus("Login successful. Routing now.", "ok");
-        history.replaceState(null, "", window.location.pathname + window.location.search);
-        routeByRole(user);
+        routeByRole(JSON.parse(userRaw || "{}"));
       } catch (parseError) {
-        setStatus("Login succeeded but user parsing failed.", "error");
+        setStatus("Login succeeded. Continue to your workspace.", "ok");
       }
     }
 
     function routeByRole(user) {
       const roles = Array.isArray(user && user.roles) ? user.roles : [];
-      if (roles.includes("admin")) {
-        window.location.href = "/admin";
-        return;
-      }
-      window.location.href = "/reseller";
+      window.location.href = roles.includes("admin") ? "/admin" : "/reseller";
+    }
+
+    function hydrateRememberPreference() {
+      $("rememberMe").checked = getRememberPreference();
+    }
+
+    function getRememberPreference() {
+      return localStorage.getItem(storage.remember) !== "0";
+    }
+
+    function persistRememberPreference() {
+      localStorage.setItem(storage.remember, $("rememberMe").checked ? "1" : "0");
+    }
+
+    function getToken(key) {
+      return localStorage.getItem(key) || sessionStorage.getItem(key) || "";
+    }
+
+    function setTokenPair(accessToken, refreshToken) {
+      const target = getRememberPreference() ? localStorage : sessionStorage;
+      const other = target === localStorage ? sessionStorage : localStorage;
+      target.setItem(storage.access, accessToken);
+      target.setItem(storage.refresh, refreshToken);
+      other.removeItem(storage.access);
+      other.removeItem(storage.refresh);
     }
   </script>
 </body>
