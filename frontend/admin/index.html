@@ -1,17 +1,662 @@
 <!doctype html>
-<html>
-<head><meta charset="utf-8"><title>Subscription Admin</title></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subscription Admin</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --ink: #172126;
+      --muted: #5b6b73;
+      --panel: rgba(255, 251, 244, 0.92);
+      --line: rgba(23, 33, 38, 0.12);
+      --accent: #b5542d;
+      --accent-dark: #873b1d;
+      --good: #266848;
+      --bad: #a33d34;
+      --shadow: 0 18px 48px rgba(48, 34, 18, 0.12);
+      --radius: 22px;
+      --font: "Segoe UI", "Helvetica Neue", sans-serif;
+      --mono: Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(181, 84, 45, 0.18), transparent 26%),
+        linear-gradient(180deg, #f7f3ec 0%, #ece4d7 100%);
+    }
+    .page {
+      width: min(1320px, calc(100vw - 28px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
+    .hero, .panel {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+    .hero {
+      padding: 28px;
+      margin-bottom: 18px;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 20px;
+      align-items: end;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent-dark);
+    }
+    h1, h2, h3 { margin: 0; letter-spacing: -0.03em; }
+    h1 { font-size: clamp(32px, 4vw, 56px); line-height: 0.96; max-width: 10ch; }
+    p { color: var(--muted); line-height: 1.55; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .stat {
+      background: rgba(255, 251, 244, 0.88);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+    }
+    .stat small {
+      display: block;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+    }
+    .stat strong { font-size: 30px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+      align-items: center;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .panel { padding: 20px; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    label {
+      display: grid;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 251, 244, 0.92);
+      color: var(--ink);
+      font: inherit;
+    }
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font: inherit;
+      cursor: pointer;
+      transition: transform 140ms ease, opacity 140ms ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    .primary { background: linear-gradient(135deg, var(--accent), #d1733c); color: #fff; }
+    .secondary { background: rgba(255, 251, 244, 0.92); border: 1px solid var(--line); color: var(--ink); }
+    .danger { background: linear-gradient(135deg, var(--bad), #cd6543); color: #fff; }
+    .status {
+      padding: 13px 16px;
+      border-radius: 16px;
+      background: rgba(255, 251, 244, 0.92);
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .status.ok { color: var(--good); }
+    .status.error { color: var(--bad); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .tableWrap { overflow: auto; }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(181, 84, 45, 0.12);
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .muted { color: var(--muted); }
+    .tight { margin-top: 8px; margin-bottom: 0; }
+    .inlineActions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .summaryGrid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .summaryCard {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      background: rgba(255, 251, 244, 0.84);
+    }
+    .summaryCard strong { display: block; font-size: 28px; margin-bottom: 6px; }
+    @media (max-width: 1100px) {
+      .hero, .summaryGrid, .row { grid-template-columns: 1fr; }
+      .span-4, .span-5, .span-7, .span-8, .span-12 { grid-column: span 12; }
+    }
+  </style>
+</head>
 <body>
-  <h1>Subscription Admin</h1>
-  <p>Lean admin console (single app): manage static pricing config JSON.</p>
-  <textarea id="cfg" rows="20" cols="100"></textarea><br>
-  <button id="save">Save Local Draft</button>
-  <pre id="out"></pre>
-<script>
-const key='pricing_config_draft';
-const defaultCfg={ID:{"12_months":["IDR",999000],"6_months":["IDR",699000]},VN:{"12_months":["VND",999000],"6_months":["VND",699000]},TH:{"12_months":["THB",1999],"6_months":["THB",1499]},MY:{"12_months":["MYR",299],"6_months":["MYR",199]},MM:{"12_months":["MMK",49000],"6_months":["MMK",29000]},fallback:{"12_months":["USD",9900],"6_months":["USD",6900]}};
-const ta=document.getElementById('cfg'); ta.value=localStorage.getItem(key)||JSON.stringify(defaultCfg,null,2);
-document.getElementById('save').onclick=()=>{try{JSON.parse(ta.value);localStorage.setItem(key,ta.value);out.textContent='Saved local draft. Deploy this JSON into Worker config.';}catch(e){out.textContent='Invalid JSON: '+e.message}}
-</script>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Admin Console</p>
+        <h1>Operations, configuration, and reporting in one place.</h1>
+        <p>Google OAuth is the only login path. The first registered user becomes admin, later registrations default to reseller, and admins can promote or demote roles from this page. Code issuance and redemption events can also be mirrored to a Google Sheet backup owned by the first admin.</p>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <small>Auth Mode</small>
+          <strong id="statAuthMode">Google</strong>
+          <p class="tight">OAuth only</p>
+        </div>
+        <div class="stat">
+          <small>Onboarding</small>
+          <strong id="statOnboarding">First Admin</strong>
+          <p class="tight">Then reseller</p>
+        </div>
+        <div class="stat">
+          <small>Orders</small>
+          <strong id="statOrders">0</strong>
+          <p class="tight">Total tracked</p>
+        </div>
+        <div class="stat">
+          <small>Codes</small>
+          <strong id="statCodes">0</strong>
+          <p class="tight">Issued / redeemed</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="toolbar">
+      <input id="apiBase" value="http://localhost:8787" style="max-width:260px;">
+      <button class="secondary" id="loadAllBtn">Reload Admin Data</button>
+      <button class="secondary" id="refreshSessionBtn">Refresh Session</button>
+      <span class="status" id="status">Ready.</span>
+    </section>
+
+    <section class="workspace">
+      <section class="panel span-4">
+        <h2>Login</h2>
+        <p class="tight">Use Google OAuth authorization code flow. The Worker exchanges the Google code server-side using your Google client ID and secret, then returns your app session to this page.</p>
+        <div class="inlineActions">
+          <button class="primary" id="loginBtn">Sign In with Google</button>
+          <button class="secondary" id="meBtn">Who Am I</button>
+          <button class="danger" id="logoutBtn">Clear Session</button>
+        </div>
+        <pre id="authOut" class="muted" style="white-space:pre-wrap;"></pre>
+      </section>
+
+      <section class="panel span-8">
+        <h2>System Summary</h2>
+        <p class="tight">Orders are grouped by client channel (`api`, `reseller`, `admin`) so reporting can separate API-originated traffic from reseller activity.</p>
+        <div class="summaryGrid" id="summaryGrid"></div>
+        <pre id="summaryOut" class="muted" style="white-space:pre-wrap;"></pre>
+      </section>
+
+      <section class="panel span-7">
+        <h2>Pricing and Setup</h2>
+        <div class="row">
+          <label>Google auth mode
+            <input id="googleOauthMode" value="google_oauth_only">
+          </label>
+          <label>Onboarding rule
+            <input id="onboardingRule" value="first_user_admin">
+          </label>
+        </div>
+        <div class="row">
+          <label>QRIS provider
+            <input id="qrisProvider" value="xendit">
+          </label>
+          <label>Card provider
+            <input id="cardProvider" value="stripe">
+          </label>
+        </div>
+        <div class="row">
+          <label><span>QRIS enabled</span><select id="qrisEnabled"><option value="true">true</option><option value="false">false</option></select></label>
+          <label><span>Card enabled</span><select id="cardEnabled"><option value="true">true</option><option value="false">false</option></select></label>
+        </div>
+        <div class="row">
+          <label>Sheet backup enabled
+            <select id="sheetBackupEnabled"><option value="false">false</option><option value="true">true</option></select>
+          </label>
+          <label>Spreadsheet prefix
+            <input id="sheetPrefix" value="Subscription">
+          </label>
+        </div>
+        <div class="row">
+          <label>Sheet script URL
+            <input id="sheetScriptUrl" placeholder="https://script.google.com/...">
+          </label>
+          <label>First admin sheet owner email
+            <input id="sheetOwnerEmail" placeholder="admin@example.com">
+          </label>
+        </div>
+        <label>Pricing JSON
+          <textarea id="pricingJson"></textarea>
+        </label>
+        <div class="inlineActions">
+          <button class="primary" id="saveConfigBtn">Save Admin Config</button>
+          <button class="secondary" id="loadConfigBtn">Reload Config</button>
+        </div>
+      </section>
+
+      <section class="panel span-5">
+        <h2>User Management</h2>
+        <p class="tight">First registered user becomes admin. Everyone after that starts as reseller until an admin changes the role set.</p>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Roles</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel span-12">
+        <h2>Orders by Client</h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Client</th>
+                <th>User</th>
+                <th>Flow</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel span-12">
+        <h2>Code Summary</h2>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Order</th>
+                <th>Client</th>
+                <th>Status</th>
+                <th>Amount</th>
+                <th>Redeem Window</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="codesTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const storage = {
+      access: "admin_access_token",
+      refresh: "admin_refresh_token",
+    };
+
+    const el = {
+      apiBase: document.getElementById("apiBase"),
+      status: document.getElementById("status"),
+      authOut: document.getElementById("authOut"),
+      summaryGrid: document.getElementById("summaryGrid"),
+      summaryOut: document.getElementById("summaryOut"),
+      pricingJson: document.getElementById("pricingJson"),
+      googleOauthMode: document.getElementById("googleOauthMode"),
+      onboardingRule: document.getElementById("onboardingRule"),
+      qrisProvider: document.getElementById("qrisProvider"),
+      cardProvider: document.getElementById("cardProvider"),
+      qrisEnabled: document.getElementById("qrisEnabled"),
+      cardEnabled: document.getElementById("cardEnabled"),
+      sheetBackupEnabled: document.getElementById("sheetBackupEnabled"),
+      sheetPrefix: document.getElementById("sheetPrefix"),
+      sheetScriptUrl: document.getElementById("sheetScriptUrl"),
+      sheetOwnerEmail: document.getElementById("sheetOwnerEmail"),
+      usersTable: document.getElementById("usersTable"),
+      ordersTable: document.getElementById("ordersTable"),
+      codesTable: document.getElementById("codesTable"),
+      statAuthMode: document.getElementById("statAuthMode"),
+      statOnboarding: document.getElementById("statOnboarding"),
+      statOrders: document.getElementById("statOrders"),
+      statCodes: document.getElementById("statCodes"),
+    };
+
+    document.getElementById("loginBtn").onclick = login;
+    document.getElementById("meBtn").onclick = loadMe;
+    document.getElementById("logoutBtn").onclick = logout;
+    document.getElementById("loadAllBtn").onclick = loadAll;
+    document.getElementById("refreshSessionBtn").onclick = refreshSession;
+    document.getElementById("saveConfigBtn").onclick = saveConfig;
+    document.getElementById("loadConfigBtn").onclick = loadConfig;
+
+    consumeOauthResult();
+    loadAll();
+
+    function token() {
+      return localStorage.getItem(storage.access) || "";
+    }
+
+    async function api(path, method = "GET", body) {
+      const res = await fetch(base() + path, {
+        method,
+        headers: {
+          "content-type": "application/json",
+          ...(token() ? { authorization: "Bearer " + token() } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const text = await res.text();
+      let data = text;
+      try { data = JSON.parse(text); } catch (error) {}
+      if (!res.ok) throw new Error(typeof data === "string" ? data : JSON.stringify(data));
+      return data;
+    }
+
+    function base() {
+      return el.apiBase.value.replace(/\/$/, "");
+    }
+
+    function setStatus(message, tone) {
+      el.status.textContent = message;
+      el.status.className = "status" + (tone ? " " + tone : "");
+    }
+
+    async function login() {
+      const redirectUrl = window.location.href.split("#")[0];
+      window.location.href = `${base()}/v1/auth/google/start?redirect_url=${encodeURIComponent(redirectUrl)}`;
+    }
+
+    async function refreshSession() {
+      try {
+        const refresh = localStorage.getItem(storage.refresh);
+        if (!refresh) throw new Error("No refresh token in local storage.");
+        const data = await api("/v1/auth/refresh", "POST", { refresh_token: refresh });
+        localStorage.setItem(storage.access, data.access_token);
+        localStorage.setItem(storage.refresh, data.refresh_token);
+        el.authOut.textContent = JSON.stringify(data, null, 2);
+        setStatus("Session refreshed.", "ok");
+      } catch (error) {
+        setStatus("Refresh failed: " + error.message, "error");
+      }
+    }
+
+    async function loadMe() {
+      try {
+        const data = await api("/v1/me");
+        el.authOut.textContent = JSON.stringify(data, null, 2);
+        setStatus("Loaded current user.", "ok");
+      } catch (error) {
+        setStatus("Unable to load current user: " + error.message, "error");
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem(storage.access);
+      localStorage.removeItem(storage.refresh);
+      el.authOut.textContent = "";
+      setStatus("Session cleared.", "ok");
+    }
+
+    function consumeOauthResult() {
+      const hash = window.location.hash.replace(/^#/, "");
+      if (!hash) return;
+      const params = new URLSearchParams(hash);
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const error = params.get("error");
+      const userRaw = params.get("user");
+      if (error) {
+        setStatus("Google OAuth failed: " + error, "error");
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+        return;
+      }
+      if (accessToken && refreshToken) {
+        localStorage.setItem(storage.access, accessToken);
+        localStorage.setItem(storage.refresh, refreshToken);
+        if (userRaw) {
+          try {
+            el.authOut.textContent = JSON.stringify({ user: JSON.parse(userRaw) }, null, 2);
+          } catch (parseError) {
+            el.authOut.textContent = userRaw;
+          }
+        }
+        setStatus("Google OAuth login completed.", "ok");
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }
+
+    async function loadAll() {
+      await Promise.allSettled([loadConfig(), loadSummary(), loadUsers(), loadOrders(), loadCodes(), loadMe()]);
+    }
+
+    async function loadConfig() {
+      try {
+        const data = await api("/v1/admin/config");
+        const config = data.config;
+        el.googleOauthMode.value = config.google_oauth_mode;
+        el.onboardingRule.value = config.onboarding_rule;
+        el.qrisProvider.value = config.payment_methods.qris.provider;
+        el.cardProvider.value = config.payment_methods.card.provider;
+        el.qrisEnabled.value = String(Boolean(config.payment_methods.qris.enabled));
+        el.cardEnabled.value = String(Boolean(config.payment_methods.card.enabled));
+        el.sheetBackupEnabled.value = String(Boolean(config.sheet_backup_enabled));
+        el.sheetPrefix.value = config.sheet_spreadsheet_prefix || "Subscription";
+        el.sheetScriptUrl.value = config.sheet_script_url || "";
+        el.sheetOwnerEmail.value = config.sheet_owner_email || "";
+        el.pricingJson.value = JSON.stringify(config.pricing, null, 2);
+        el.statAuthMode.textContent = "Google";
+        el.statOnboarding.textContent = "First Admin";
+      } catch (error) {
+        setStatus("Config load skipped: " + error.message, "error");
+      }
+    }
+
+    async function saveConfig() {
+      try {
+        const pricing = JSON.parse(el.pricingJson.value);
+        const body = {
+          pricing,
+          payment_methods: {
+            qris: { enabled: el.qrisEnabled.value === "true", provider: el.qrisProvider.value.trim() },
+            card: { enabled: el.cardEnabled.value === "true", provider: el.cardProvider.value.trim() },
+          },
+          google_oauth_mode: el.googleOauthMode.value.trim(),
+          onboarding_rule: el.onboardingRule.value.trim(),
+          sheet_backup_enabled: el.sheetBackupEnabled.value === "true",
+          sheet_script_url: el.sheetScriptUrl.value.trim(),
+          sheet_spreadsheet_prefix: el.sheetPrefix.value.trim(),
+          sheet_owner_email: el.sheetOwnerEmail.value.trim(),
+        };
+        await api("/v1/admin/config", "PUT", body);
+        setStatus("Admin config saved.", "ok");
+        await loadConfig();
+      } catch (error) {
+        setStatus("Config save failed: " + error.message, "error");
+      }
+    }
+
+    async function loadSummary() {
+      try {
+        const data = await api("/v1/admin/reports/summary");
+        const stats = data.summary || {};
+        el.statOrders.textContent = String(stats.orders_total || 0);
+        el.statCodes.textContent = String(stats.codes_total || 0);
+        el.summaryGrid.innerHTML = [
+          card("Users", stats.users_total || 0),
+          card("Admins", stats.admins_total || 0),
+          card("Resellers", stats.resellers_total || 0),
+          card("Paid Orders", stats.orders_paid || 0),
+          card("Codes Issued", stats.codes_total || 0),
+          card("Codes Redeemed", stats.codes_redeemed || 0),
+          card("API Orders", data.orders_by_channel && data.orders_by_channel.api ? data.orders_by_channel.api.total : 0),
+          card("Reseller Orders", data.orders_by_channel && data.orders_by_channel.reseller ? data.orders_by_channel.reseller.total : 0),
+        ].join("");
+        el.summaryOut.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        el.summaryGrid.innerHTML = "";
+        el.summaryOut.textContent = "";
+        setStatus("Summary load skipped: " + error.message, "error");
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const data = await api("/v1/admin/users");
+        el.usersTable.innerHTML = (data.users || []).map((user) => `
+          <tr>
+            <td>
+              <strong>${escapeHtml(user.email)}</strong><br>
+              <span class="muted">${escapeHtml(user.display_name || "")}</span>
+            </td>
+            <td>
+              <select data-user-id="${user.id}">
+                <option value="reseller" ${user.roles.includes("reseller") && !user.roles.includes("admin") ? "selected" : ""}>reseller</option>
+                <option value="admin,reseller" ${user.roles.includes("admin") ? "selected" : ""}>admin + reseller</option>
+              </select>
+            </td>
+            <td><button class="secondary" data-save-user="${user.id}">Save Role</button></td>
+          </tr>
+        `).join("");
+        el.usersTable.querySelectorAll("[data-save-user]").forEach((button) => {
+          button.onclick = async () => {
+            const userId = button.getAttribute("data-save-user");
+            const select = el.usersTable.querySelector(`select[data-user-id="${userId}"]`);
+            const roles = select.value.split(",");
+            try {
+              await api(`/v1/admin/users/${userId}/roles`, "PUT", { roles });
+              setStatus("User roles updated.", "ok");
+              await loadUsers();
+              await loadSummary();
+            } catch (error) {
+              setStatus("Role update failed: " + error.message, "error");
+            }
+          };
+        });
+      } catch (error) {
+        el.usersTable.innerHTML = "";
+      }
+    }
+
+    async function loadOrders() {
+      try {
+        const data = await api("/v1/admin/orders");
+        el.ordersTable.innerHTML = (data.orders || []).map((order) => `
+          <tr>
+            <td><strong>${escapeHtml(order.order_id)}</strong></td>
+            <td><span class="pill">${escapeHtml(order.channel)}</span></td>
+            <td>${escapeHtml(order.actor_email || "-")}</td>
+            <td>${escapeHtml(order.flow_type)} / ${escapeHtml(order.duration_code)}</td>
+            <td>${escapeHtml(order.payment_method)} / ${escapeHtml(order.provider)}<br><span class="muted">${escapeHtml(order.currency)} ${order.amount_minor}</span></td>
+            <td>${escapeHtml(order.status)}</td>
+            <td>${escapeHtml(order.created_at)}</td>
+          </tr>
+        `).join("");
+      } catch (error) {
+        el.ordersTable.innerHTML = "";
+      }
+    }
+
+    async function loadCodes() {
+      try {
+        const data = await api("/v1/admin/codes");
+        el.codesTable.innerHTML = (data.codes || []).map((code) => `
+          <tr>
+            <td><strong>${escapeHtml(code.id)}</strong><br><span class="muted">${escapeHtml(code.flow_type)} / ${escapeHtml(code.duration_code)}</span></td>
+            <td>${escapeHtml(code.order_id || "-")}</td>
+            <td><span class="pill">${escapeHtml(code.channel || "-")}</span><br><span class="muted">${escapeHtml(code.actor_email || "-")}</span></td>
+            <td>${escapeHtml(code.status)}</td>
+            <td>${escapeHtml(code.currency || "-")} ${code.amount_minor == null ? "-" : code.amount_minor}</td>
+            <td>${escapeHtml(code.redeem_expires_at || "-")}<br><span class="muted">${escapeHtml(code.redeemed_at || "")}</span></td>
+            <td>${escapeHtml(code.created_at)}</td>
+          </tr>
+        `).join("");
+      } catch (error) {
+        el.codesTable.innerHTML = "";
+      }
+    }
+
+    function card(label, value) {
+      return `<div class="summaryCard"><strong>${escapeHtml(String(value))}</strong><span class="muted">${escapeHtml(label)}</span></div>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+  </script>
 </body>
 </html>

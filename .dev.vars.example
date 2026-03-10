@@ -1,0 +1,17 @@
+CODE_PRIVATE_JWK=
+CODE_PUBLIC_JWK=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Optional local-only development override.
+# Set to true only when you want /v1/auth/google/callback
+# to accept tokens like: dev:admin@example.com
+ALLOW_DEV_AUTH=false
+
+# Optional payment provider secrets for future real integrations.
+XENDIT_API_KEY=
+STRIPE_SECRET_KEY=
+PAYMENT_WEBHOOK_SECRET=
+
+# Optional Google Sheet backup webhook endpoint.
+GOOGLE_SHEET_SCRIPT_URL=

@@ -1,0 +1,7 @@
+.dev.vars
+.env
+.env.local
+.wrangler/
+wrangler-uat.log
+tail-log.json
+id.txt
