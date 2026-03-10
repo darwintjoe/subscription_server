@@ -1,41 +1,495 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="manifest" href="/manifest.webmanifest">
-  <title>Reseller PWA</title>
+  <title>Sell More Subscription</title>
+  <style>
+    :root {
+      --bg: #f6f2e9;
+      --panel: #fffaf3;
+      --panel-soft: #f5ecdc;
+      --ink: #172126;
+      --muted: #627178;
+      --line: rgba(23, 33, 38, 0.12);
+      --accent: #1f7f5c;
+      --accent-dark: #176348;
+      --warn: #bf5f33;
+      --shadow: 0 18px 48px rgba(55, 41, 20, 0.12);
+      --radius: 22px;
+      --font: "Segoe UI", "Helvetica Neue", sans-serif;
+      --mono: Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgba(31, 127, 92, 0.16), transparent 28%),
+        linear-gradient(180deg, #faf6ee 0%, #eee3d2 100%);
+      color: var(--ink);
+      font-family: var(--font);
+    }
+    .page {
+      width: min(560px, calc(100vw - 18px));
+      margin: 0 auto;
+      padding: 14px 0 28px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .hero {
+      padding-top: 22px;
+      background:
+        radial-gradient(circle at top left, rgba(191, 95, 51, 0.12), transparent 32%),
+        var(--panel);
+    }
+    .logoRow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .logoBadge {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .logoBadge img {
+      width: 26px;
+      height: 26px;
+    }
+    .brand p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    h1, h2, h3 {
+      margin: 0;
+      letter-spacing: -0.03em;
+    }
+    h1 {
+      font-size: clamp(30px, 9vw, 42px);
+      line-height: 0.95;
+      margin-bottom: 8px;
+    }
+    h2 { font-size: 21px; margin-bottom: 10px; }
+    h3 { font-size: 15px; margin-bottom: 8px; }
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .stack { display: grid; gap: 12px; }
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .summaryRow {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .mini {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+    }
+    .mini span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .mini strong {
+      display: block;
+      font-size: 24px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    input, select, textarea, button {
+      font: inherit;
+    }
+    input, select, textarea {
+      width: 100%;
+      background: #fffef9;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--ink);
+      padding: 12px;
+    }
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      cursor: pointer;
+    }
+    .primary {
+      background: linear-gradient(135deg, var(--accent), #2d9a71);
+      color: #fff;
+    }
+    .secondary {
+      background: #fffef9;
+      border: 1px solid var(--line);
+      color: var(--ink);
+    }
+    .outline {
+      background: transparent;
+      border: 1px dashed rgba(23, 33, 38, 0.24);
+      color: var(--ink);
+    }
+    .buttonRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .status {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fffef9;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .status.ok { color: var(--accent-dark); }
+    .status.error { color: var(--warn); }
+    .priceCard,
+    .codeCard {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel-soft);
+      padding: 14px;
+    }
+    .priceValue {
+      font-size: 30px;
+      font-weight: 800;
+      line-height: 1;
+      margin: 8px 0 6px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(31, 127, 92, 0.12);
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .tiny {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    @media (max-width: 520px) {
+      .grid2,
+      .summaryRow {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>Reseller PWA</h1>
-  <label>API Base <input id="base" value="http://localhost:8787"></label><br>
-  <label>Country <input id="country" value="ID"></label>
-  <label>Duration
-    <select id="duration"><option>6_months</option><option selected>12_months</option></select>
-  </label>
-  <button id="quote">Quote</button>
-  <pre id="quoteOut"></pre>
-  <hr>
-  <button id="createPayment">Create Payment Intent</button>
-  <pre id="paymentOut"></pre>
-  <button id="markPaid">Simulate Webhook Paid</button>
-  <button id="issueCode">Issue Code</button>
-  <pre id="codeOut"></pre>
-  <button id="redeemCode">Redeem Last Code</button>
-  <pre id="redeemOut"></pre>
-<script>
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
-let intent,lastCode,quote;
-const j=(id)=>document.getElementById(id);
-async function api(path,method='GET',body){
- const res=await fetch(j('base').value+path,{method,headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
- const txt=await res.text(); try{return {ok:res.ok,data:JSON.parse(txt)}}catch{return{ok:res.ok,data:txt}}
-}
-j('quote').onclick=async()=>{quote=(await api('/v1/pricing/quote','POST',{duration_code:j('duration').value,country_code:j('country').value})).data;j('quoteOut').textContent=JSON.stringify(quote,null,2)};
-j('createPayment').onclick=async()=>{const r=await api('/v1/payments/intents','POST',{payment_method:'qris',amount_minor:quote.amount_minor,currency:quote.currency,flow_type:'reseller_code',duration_code:j('duration').value});intent=r.data;j('paymentOut').textContent=JSON.stringify(r.data,null,2)};
-j('markPaid').onclick=async()=>{const r=await api('/v1/webhooks/payments/mock','POST',{payment_intent_id:intent.id});j('paymentOut').textContent+='\n'+JSON.stringify(r.data,null,2)};
-j('issueCode').onclick=async()=>{const r=await api('/v1/codes/issue','POST',{payment_intent_id:intent.id,flow_type:'reseller_code',duration_code:j('duration').value});lastCode=r.data.code_value;j('codeOut').textContent=JSON.stringify(r.data,null,2)};
-j('redeemCode').onclick=async()=>{const r=await api('/v1/codes/redeem','POST',{code_value:lastCode});j('redeemOut').textContent=JSON.stringify(r.data,null,2)};
-</script>
+  <main class="page">
+    <section class="card hero">
+      <div class="logoRow">
+        <a class="logoBadge" href="https://sellmore-seven.vercel.app" target="_blank" rel="noreferrer">
+          <img src="https://sellmore-seven.vercel.app/favicon.ico" alt="Sell More logo">
+        </a>
+        <div class="brand">
+          <h2 style="margin-bottom:4px;">Sell More</h2>
+          <p>Mobile subscription checkout</p>
+        </div>
+      </div>
+      <h1>Get your code in minutes</h1>
+      <p>Your country and price are detected automatically. Choose an available period, pay with QRIS or card, then copy or share the code when payment is complete.</p>
+      <div class="summaryRow">
+        <div class="mini">
+          <span>Detected Country</span>
+          <strong id="countrySummary">-</strong>
+        </div>
+        <div class="mini">
+          <span>Selected Period</span>
+          <strong id="periodSummary">12m</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="card stack">
+      <label>API Base
+        <input id="base" value="https://subscription-live.applocator.workers.dev">
+      </label>
+      <div class="buttonRow">
+        <button class="secondary" id="detectBtn">Detect Country</button>
+        <button class="secondary" id="reloadQuoteBtn">Reload Price</button>
+      </div>
+      <div class="status" id="status">Ready.</div>
+    </section>
+
+    <section class="card stack">
+      <h2>1. Price</h2>
+      <div class="grid2">
+        <label>Country
+          <input id="country" value="" maxlength="2" placeholder="Auto">
+        </label>
+        <label>Subscription Period
+          <select id="duration">
+            <option value="12_months" selected>12 months</option>
+            <option value="6_months">6 months</option>
+          </select>
+        </label>
+      </div>
+      <div class="priceCard">
+        <span class="pill" id="priceBadge">Waiting for quote</span>
+        <div class="priceValue" id="priceValue">-</div>
+        <p id="priceMeta">Price is pushed from the server.</p>
+      </div>
+    </section>
+
+    <section class="card stack">
+      <h2>2. Payment</h2>
+      <div class="grid2">
+        <label>Payment Method
+          <select id="paymentMethod">
+            <option value="qris" selected>QRIS</option>
+            <option value="card">Card</option>
+          </select>
+        </label>
+        <label>Detected Country Source
+          <input id="countrySource" value="server / fallback" readonly>
+        </label>
+      </div>
+      <div class="buttonRow">
+        <button class="primary" id="createPaymentBtn">Create Payment</button>
+        <button class="secondary" id="completePaymentBtn">Complete Test Payment</button>
+      </div>
+      <pre id="paymentOut"></pre>
+    </section>
+
+    <section class="card stack">
+      <h2>3. Your Code</h2>
+      <div class="codeCard">
+        <h3>Latest Code</h3>
+        <pre id="codeValue">No code yet.</pre>
+      </div>
+      <div class="buttonRow">
+        <button class="primary" id="copyCodeBtn">Copy Code</button>
+        <button class="secondary" id="shareCodeBtn">Share Code</button>
+      </div>
+    </section>
+
+    <section class="card stack">
+      <h2>Test Button</h2>
+      <p>Enter the keyword <strong>keren</strong>. The server will issue a test code valid for 1 day.</p>
+      <label>Verification Keyword
+        <input id="testKeyword" placeholder="keren">
+      </label>
+      <div class="buttonRow">
+        <button class="outline" id="testCodeBtn">Generate 1-Day Test Code</button>
+      </div>
+      <pre id="testOut"></pre>
+    </section>
+  </main>
+
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+
+    const state = {
+      quote: null,
+      intent: null,
+      lastCode: "",
+      lastCountrySource: "server / fallback",
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    $("detectBtn").onclick = detectCountry;
+    $("reloadQuoteBtn").onclick = loadQuote;
+    $("duration").onchange = loadQuote;
+    $("paymentMethod").onchange = () => setStatus(`Payment method set to ${$("paymentMethod").value}.`, "ok");
+    $("createPaymentBtn").onclick = createPayment;
+    $("completePaymentBtn").onclick = completePayment;
+    $("copyCodeBtn").onclick = copyCode;
+    $("shareCodeBtn").onclick = shareCode;
+    $("testCodeBtn").onclick = generateTestCode;
+    $("country").addEventListener("input", () => {
+      $("country").value = $("country").value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
+    });
+
+    bootstrap();
+
+    async function bootstrap() {
+      await detectCountry();
+      await loadQuote();
+    }
+
+    async function api(path, method = "GET", body) {
+      const response = await fetch($("base").value.replace(/\/$/, "") + path, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const text = await response.text();
+      let data = text;
+      try { data = JSON.parse(text); } catch (error) {}
+      if (!response.ok) throw new Error(typeof data === "string" ? data : JSON.stringify(data));
+      return data;
+    }
+
+    function setStatus(message, tone) {
+      $("status").textContent = message;
+      $("status").className = "status" + (tone ? " " + tone : "");
+    }
+
+    async function detectCountry() {
+      try {
+        if (!navigator.geolocation) throw new Error("Geolocation is not supported on this device.");
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 8000 });
+        });
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        const geo = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
+        const geoData = await geo.json();
+        const country = String((geoData.address && geoData.address.country_code) || "").toUpperCase();
+        if (!country) throw new Error("Could not map your device location to a country.");
+        $("country").value = country;
+        state.lastCountrySource = "device location";
+        $("countrySource").value = state.lastCountrySource;
+        $("countrySummary").textContent = country;
+        setStatus(`Country detected as ${country}.`, "ok");
+      } catch (error) {
+        state.lastCountrySource = "server / fallback";
+        $("countrySource").value = state.lastCountrySource;
+        $("countrySummary").textContent = $("country").value || "-";
+        setStatus("Country detection fallback active: " + error.message, "error");
+      }
+    }
+
+    async function loadQuote() {
+      try {
+        const duration = $("duration").value;
+        const country = $("country").value.trim();
+        const quote = await api("/v1/pricing/quote", "POST", {
+          duration_code: duration,
+          ...(country ? { country_code: country } : {}),
+        });
+        state.quote = quote;
+        $("periodSummary").textContent = duration === "12_months" ? "12m" : "6m";
+        $("countrySummary").textContent = quote.country_code || country || "-";
+        $("priceBadge").textContent = quote.used_fallback ? "Fallback pricing" : "Localized pricing";
+        $("priceValue").textContent = `${quote.currency} ${formatAmount(quote.amount_minor)}`;
+        $("priceMeta").textContent = `${duration === "12_months" ? "12 months" : "6 months"} for ${quote.country_code || "fallback region"}`;
+        setStatus("Price loaded from server.", "ok");
+      } catch (error) {
+        setStatus("Unable to load price: " + error.message, "error");
+      }
+    }
+
+    async function createPayment() {
+      try {
+        if (!state.quote) await loadQuote();
+        const payment = await api("/v1/payments/intents", "POST", {
+          payment_method: $("paymentMethod").value,
+          flow_type: "reseller_code",
+          duration_code: $("duration").value,
+          country_code: $("country").value.trim() || undefined,
+          channel: "reseller",
+        });
+        state.intent = payment;
+        $("paymentOut").textContent = JSON.stringify(payment, null, 2);
+        setStatus(`Payment intent created with ${$("paymentMethod").value}.`, "ok");
+      } catch (error) {
+        setStatus("Create payment failed: " + error.message, "error");
+      }
+    }
+
+    async function completePayment() {
+      try {
+        if (!state.intent) throw new Error("Create a payment first.");
+        await api("/v1/webhooks/payments/mock", "POST", { payment_intent_id: state.intent.id });
+        const issued = await api("/v1/codes/issue", "POST", {
+          payment_intent_id: state.intent.id,
+          flow_type: "reseller_code",
+          duration_code: $("duration").value,
+        });
+        state.lastCode = issued.code_value;
+        $("codeValue").textContent = issued.code_value;
+        setStatus("Payment completed and code issued.", "ok");
+      } catch (error) {
+        setStatus("Payment completion failed: " + error.message, "error");
+      }
+    }
+
+    async function copyCode() {
+      try {
+        if (!state.lastCode) throw new Error("No code available yet.");
+        await navigator.clipboard.writeText(state.lastCode);
+        setStatus("Code copied to clipboard.", "ok");
+      } catch (error) {
+        setStatus("Copy failed: " + error.message, "error");
+      }
+    }
+
+    async function shareCode() {
+      try {
+        if (!state.lastCode) throw new Error("No code available yet.");
+        if (!navigator.share) throw new Error("Web Share is not available on this device.");
+        await navigator.share({
+          title: "Sell More subscription code",
+          text: state.lastCode,
+        });
+        setStatus("Code shared.", "ok");
+      } catch (error) {
+        setStatus("Share failed: " + error.message, "error");
+      }
+    }
+
+    async function generateTestCode() {
+      try {
+        const result = await api("/v1/test/codes/issue", "POST", { keyword: $("testKeyword").value.trim() });
+        state.lastCode = result.code_value;
+        $("codeValue").textContent = result.code_value;
+        $("testOut").textContent = JSON.stringify(result, null, 2);
+        setStatus("1-day test code issued.", "ok");
+      } catch (error) {
+        setStatus("Test code failed: " + error.message, "error");
+      }
+    }
+
+    function formatAmount(value) {
+      return new Intl.NumberFormat(undefined).format(Number(value || 0));
+    }
+  </script>
 </body>
 </html>

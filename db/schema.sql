@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS payment_intents (
   actor_email TEXT,
   channel TEXT NOT NULL CHECK(channel IN ('api', 'reseller', 'admin')),
   flow_type TEXT NOT NULL CHECK(flow_type IN ('direct_subscribe','reseller_code','bulk_printed_card')),
-  duration_code TEXT NOT NULL CHECK(duration_code IN ('6_months','12_months')),
+  duration_code TEXT NOT NULL CHECK(duration_code IN ('1_day','6_months','12_months')),
   payment_method TEXT NOT NULL CHECK(payment_method IN ('qris', 'card')),
   provider TEXT NOT NULL,
   country_code TEXT,

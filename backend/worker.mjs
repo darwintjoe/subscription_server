@@ -1,6 +1,7 @@
 const ACCESS_TTL_SECONDS = 60 * 60;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
-const DURATIONS = ["6_months", "12_months"];
+const DURATIONS = ["1_day", "6_months", "12_months"];
+const PURCHASE_DURATIONS = ["6_months", "12_months"];
 const PAYMENT_METHODS = ["qris", "card"];
 const FLOW_TYPES = ["direct_subscribe", "reseller_code", "bulk_printed_card"];
 const DEFAULT_PAYMENT_METHODS = {
@@ -52,7 +53,7 @@ async function router(request, env, ctx) {
   if (request.method === "POST" && path === "/v1/pricing/quote") {
     const body = await readJson(request);
     const duration = body.duration_code;
-    if (!DURATIONS.includes(duration)) return json({ error: "invalid_duration" }, 400);
+    if (!PURCHASE_DURATIONS.includes(duration)) return json({ error: "invalid_duration" }, 400);
     const config = await getAppConfig(db);
     const country = (body.country_code || request.headers.get("CF-IPCountry") || "").toUpperCase();
     const quote = resolveQuote(config.pricing, country, duration);
@@ -66,9 +67,8 @@ async function router(request, env, ctx) {
   }
 
   if (request.method === "POST" && path === "/v1/payments/intents") {
-    const auth = await requireAuth(request, db);
-    if (auth.response) return auth.response;
-    return handleCreatePaymentIntent(request, db, auth.user);
+    const auth = await optionalAuth(request, db);
+    return handleCreatePaymentIntent(request, db, auth.user || null);
   }
 
   if (request.method === "GET" && path.startsWith("/v1/payments/intents/")) {
@@ -82,14 +82,17 @@ async function router(request, env, ctx) {
   }
 
   if (request.method === "POST" && path === "/v1/codes/issue") {
-    const auth = await requireAuth(request, db);
-    if (auth.response) return auth.response;
-    return handleIssueCode(request, env, ctx, db, auth.user);
+    const auth = await optionalAuth(request, db);
+    return handleIssueCode(request, env, ctx, db, auth.user || null);
   }
 
   if (request.method === "POST" && path === "/v1/codes/redeem") {
     const auth = await optionalAuth(request, db);
     return handleRedeemCode(request, env, ctx, db, auth.user || null);
+  }
+
+  if (request.method === "POST" && path === "/v1/test/codes/issue") {
+    return handleIssueTestCode(request, env, ctx, db);
   }
 
   if (request.method === "GET" && path === "/v1/admin/config") {
@@ -279,7 +282,7 @@ async function handleRefresh(request, db) {
 async function handleCreatePaymentIntent(request, db, user) {
   const body = await readJson(request);
   if (!FLOW_TYPES.includes(body.flow_type)) return json({ error: "invalid_flow_type" }, 400);
-  if (!DURATIONS.includes(body.duration_code)) return json({ error: "invalid_duration" }, 400);
+  if (!PURCHASE_DURATIONS.includes(body.duration_code)) return json({ error: "invalid_duration" }, 400);
   if (!PAYMENT_METHODS.includes(body.payment_method)) return json({ error: "invalid_payment_method" }, 400);
 
   const config = await getAppConfig(db);
@@ -293,9 +296,9 @@ async function handleCreatePaymentIntent(request, db, user) {
   const intent = {
     id,
     order_id: crypto.randomUUID(),
-    actor_user_ref: user.id,
-    actor_role: highestRole(user.roles),
-    actor_email: user.email,
+    actor_user_ref: user ? user.id : null,
+    actor_role: user ? highestRole(user.roles) : "guest",
+    actor_email: user ? user.email : null,
     channel,
     flow_type: body.flow_type,
     duration_code: body.duration_code,
@@ -389,7 +392,7 @@ async function handleIssueCode(request, env, ctx, db, user) {
   const intent = await db.prepare(`SELECT * FROM payment_intents WHERE id = ?`).bind(body.payment_intent_id).first();
   if (!intent) return json({ error: "intent_not_found" }, 404);
   if (intent.status !== "paid") return json({ error: "payment_not_paid" }, 409);
-  if (!isAdmin(user) && intent.actor_user_ref !== user.id) return json({ error: "forbidden" }, 403);
+  if (user && !isAdmin(user) && intent.actor_user_ref && intent.actor_user_ref !== user.id) return json({ error: "forbidden" }, 403);
 
   const existing = await db.prepare(`SELECT id, code_value, status, redeem_expires_at FROM codes WHERE payment_ref = ?`).bind(intent.id).first();
   if (existing) {
@@ -426,10 +429,10 @@ async function handleIssueCode(request, env, ctx, db, user) {
     durationCode,
     status,
     paymentRef: intent.id,
-    issuedByUserRef: user.id,
+    issuedByUserRef: user ? user.id : null,
     redeemExpiresAt,
     redeemedAt,
-    redeemedByUserRef: status === "redeemed" ? user.id : null,
+    redeemedByUserRef: status === "redeemed" && user ? user.id : null,
     metadataJson: JSON.stringify(payload),
   });
 
@@ -437,7 +440,7 @@ async function handleIssueCode(request, env, ctx, db, user) {
     await createCodeRedemption(db, {
       redemptionId: crypto.randomUUID(),
       codeId,
-      redeemedByUserRef: user.id,
+      redeemedByUserRef: user ? user.id : null,
       redeemedContext: "direct_subscribe_auto_redeem",
     });
   }
@@ -453,8 +456,8 @@ async function handleIssueCode(request, env, ctx, db, user) {
     eventType: "code.issued",
     entityType: "code",
     entityId: codeId,
-    actorUserRef: user.id,
-    actorRole: highestRole(user.roles),
+    actorUserRef: user ? user.id : null,
+    actorRole: user ? highestRole(user.roles) : "guest",
     payload: { ...response, payment_intent_id: intent.id, order_id: intent.order_id },
   });
 
@@ -500,6 +503,62 @@ async function handleRedeemCode(request, env, ctx, db, user) {
 
   ctx.waitUntil(appendCodeBackup(env, db, "code_redeemed", { code: rec, redeemed_at: redeemedAt, actor: user }));
   return json({ code_id: rec.id, status: "redeemed", redeemed_at: redeemedAt });
+}
+
+async function handleIssueTestCode(request, env, ctx, db) {
+  const body = await readJson(request);
+  if (String(body.keyword || "").trim().toLowerCase() !== "keren") {
+    return json({ error: "invalid_test_keyword" }, 403);
+  }
+
+  const codeId = crypto.randomUUID();
+  const now = Date.now();
+  const redeemExpiresAt = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+  const payload = {
+    code_id: codeId,
+    app_id: "sellmore",
+    duration_code: "1_day",
+    flow_type: "reseller_code",
+    iat: now,
+    exp: Date.parse(redeemExpiresAt),
+    payment_ref: null,
+    test_code: true,
+  };
+  const codeValue = await signCode(payload, env.CODE_PRIVATE_JWK);
+
+  await createCodeRecord(db, {
+    codeId,
+    codeValue,
+    flow: "reseller_code",
+    durationCode: "1_day",
+    status: "issued",
+    paymentRef: null,
+    issuedByUserRef: null,
+    redeemExpiresAt,
+    redeemedAt: null,
+    redeemedByUserRef: null,
+    metadataJson: JSON.stringify(payload),
+  });
+
+  const response = {
+    code_id: codeId,
+    code_value: codeValue,
+    status: "issued",
+    redeem_expires_at: redeemExpiresAt,
+    duration_code: "1_day",
+  };
+
+  await appendAuditEvent(db, {
+    eventType: "code.test_issued",
+    entityType: "code",
+    entityId: codeId,
+    actorUserRef: null,
+    actorRole: "guest",
+    payload: response,
+  });
+
+  ctx.waitUntil(appendCodeBackup(env, db, "code_test_issued", { code: response }));
+  return json(response, 201);
 }
 
 async function handleUpdateConfig(request, db, user) {
@@ -580,7 +639,7 @@ async function handleUpdateRoles(request, db, actor, userId) {
 async function handleCreateCodeBatch(request, db, user) {
   const body = await readJson(request);
   if (!Number.isInteger(body.quantity) || body.quantity < 1) return json({ error: "invalid_quantity" }, 400);
-  if (!DURATIONS.includes(body.duration_code)) return json({ error: "invalid_duration" }, 400);
+  if (!PURCHASE_DURATIONS.includes(body.duration_code)) return json({ error: "invalid_duration" }, 400);
 
   const batch = {
     id: crypto.randomUUID(),
@@ -680,7 +739,7 @@ function validatePricingConfig(input) {
   if (!pricing || typeof pricing !== "object" || !pricing.fallback) throw new Error("invalid_pricing_config");
   for (const market of Object.keys(pricing)) {
     if (market !== "fallback" && !/^[A-Z]{2}$/.test(market)) throw new Error("invalid_market_code_" + market);
-    for (const duration of DURATIONS) {
+    for (const duration of PURCHASE_DURATIONS) {
       const item = pricing[market] && pricing[market][duration];
       if (!item) throw new Error("missing_pricing_" + market + "_" + duration);
       if (!/^[A-Z]{3}$/.test(String(item.currency || ""))) throw new Error("invalid_currency_" + market + "_" + duration);
@@ -705,6 +764,7 @@ function validatePaymentMethods(input) {
 
 function normalizeChannel(channel, user) {
   if (channel === "api" || channel === "reseller" || channel === "admin") return channel;
+  if (!user) return "reseller";
   if (isAdmin(user)) return "admin";
   if (user.roles.includes("reseller")) return "reseller";
   return "api";

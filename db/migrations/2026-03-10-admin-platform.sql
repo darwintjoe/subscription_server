@@ -80,6 +80,32 @@ CREATE INDEX IF NOT EXISTS idx_payment_intents_status_created_at ON payment_inte
 CREATE INDEX IF NOT EXISTS idx_payment_intents_actor_user_ref ON payment_intents(actor_user_ref);
 CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at);
 
+DROP TABLE IF EXISTS codes_rebuild;
+CREATE TABLE codes_rebuild (
+  id TEXT PRIMARY KEY,
+  code_value TEXT NOT NULL UNIQUE,
+  flow_type TEXT NOT NULL CHECK(flow_type IN ('direct_subscribe','reseller_code','bulk_printed_card')),
+  duration_code TEXT NOT NULL CHECK(duration_code IN ('1_day','6_months','12_months')),
+  status TEXT NOT NULL CHECK(status IN ('issued','reserved','redeemed','expired','canceled')),
+  payment_ref TEXT,
+  issued_to_user_ref TEXT,
+  issued_by_user_ref TEXT,
+  redeem_expires_at TEXT,
+  redeemed_at TEXT,
+  redeemed_by_user_ref TEXT,
+  metadata_json TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+INSERT INTO codes_rebuild
+SELECT id, code_value, flow_type, duration_code, status, payment_ref, issued_to_user_ref, issued_by_user_ref,
+       redeem_expires_at, redeemed_at, redeemed_by_user_ref, metadata_json, created_at, updated_at
+FROM codes;
+DROP TABLE codes;
+ALTER TABLE codes_rebuild RENAME TO codes;
+CREATE INDEX IF NOT EXISTS idx_codes_status_expiry ON codes(status, redeem_expires_at);
+CREATE INDEX IF NOT EXISTS idx_codes_payment_ref ON codes(payment_ref);
+
 INSERT INTO app_config (
   id,
   pricing_json,
