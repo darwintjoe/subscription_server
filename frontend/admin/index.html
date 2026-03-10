@@ -587,7 +587,7 @@
 
     function creatorLabel(row) {
       if (String(row.channel || "").toLowerCase() === "api") return "API";
-      return row.actor_email || row.created_by || "Reseller";
+      return row.actor_email || row.issuer_email || row.issuer_name || row.created_by || "Reseller";
     }
 
     function shortCode(codeValue) {
