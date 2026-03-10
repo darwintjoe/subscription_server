@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE TABLE IF NOT EXISTS audit_events (
+DROP TABLE IF EXISTS audit_events_rebuild;
+CREATE TABLE audit_events_rebuild (
   id TEXT PRIMARY KEY,
   event_type TEXT NOT NULL,
   entity_type TEXT NOT NULL,
@@ -24,6 +25,19 @@ CREATE TABLE IF NOT EXISTS audit_events (
   payload_json TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
+INSERT INTO audit_events_rebuild (id, event_type, entity_type, entity_id, actor_user_ref, actor_role, payload_json, created_at)
+SELECT
+  id,
+  event_type,
+  COALESCE(target_type, 'unknown'),
+  target_id,
+  actor_user_id,
+  actor_role,
+  payload_json,
+  created_at
+FROM audit_events;
+DROP TABLE IF EXISTS audit_events;
+ALTER TABLE audit_events_rebuild RENAME TO audit_events;
 
 CREATE TABLE IF NOT EXISTS app_config (
   id TEXT PRIMARY KEY CHECK (id = 'default'),

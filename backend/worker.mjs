@@ -347,8 +347,8 @@ async function handleCreatePaymentIntent(request, db, user) {
     eventType: "payment_intent.created",
     entityType: "payment_intent",
     entityId: intent.id,
-    actorUserRef: user.id,
-    actorRole: highestRole(user.roles),
+    actorUserRef: user ? user.id : null,
+    actorRole: user ? highestRole(user.roles) : "guest",
     payload: intent,
   });
 
