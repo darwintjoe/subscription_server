@@ -967,9 +967,9 @@ async function listOrders(db) {
 
 async function listCodes(db) {
   const rows = await db.prepare(`
-    SELECT c.id, c.flow_type, c.duration_code, c.status, c.payment_ref, c.issued_by_user_ref,
+    SELECT c.id, c.code_value, c.flow_type, c.duration_code, c.status, c.payment_ref, c.issued_by_user_ref,
            c.redeem_expires_at, c.redeemed_at, c.redeemed_by_user_ref, c.created_at,
-           p.order_id, p.actor_email, p.channel, p.amount_minor, p.currency
+           p.order_id, p.actor_email, p.channel, p.country_code, p.amount_minor, p.currency
     FROM codes c
     LEFT JOIN payment_intents p ON p.id = c.payment_ref
     ORDER BY c.created_at DESC
