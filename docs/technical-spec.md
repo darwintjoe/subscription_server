@@ -18,16 +18,16 @@ The system has 3 app surfaces:
 
 ## 2. Locked Architecture
 
-### Main backend server
+### Main backend runtime
 
-The main backend is a writable server process implemented in [`backend/server.mjs`](C:\workspace\subscription_server\backend\server.mjs).
+The main backend runtime is the Cloudflare Worker implemented in [`backend/worker.mjs`](C:\workspace\subscription_server\backend\worker.mjs).
 
 Responsibilities:
 
 - Google OAuth for admin and reseller
-- JSON-backed user storage
-- JSON-backed pricing / discount / promotion config
-- local backup queue management
+- KV-backed user storage
+- KV-backed pricing / discount / promotion config
+- KV-backed backup queue management
 - admin and reseller API surface
 - client app integration endpoints
 - direct Cloudflare D1 access for code storage
@@ -48,21 +48,22 @@ D1 stores:
 
 D1 is the live source of truth for code validity and one-time-use enforcement.
 
-### Local JSON on backend server
+### Cloudflare KV
 
-The backend server stores small writable datasets as JSON files:
+Small writable datasets are stored as JSON documents inside one KV namespace.
 
-- [`data/users.json`](C:\workspace\subscription_server\data\users.json)
-- [`data/config.json`](C:\workspace\subscription_server\data\config.json)
-- [`data/backup-queue.json`](C:\workspace\subscription_server\data\backup-queue.json)
-- [`data/last-sent-batch.json`](C:\workspace\subscription_server\data\last-sent-batch.json)
+Logical documents:
+
+- `users`
+- `config`
+- `backup_queue`
+- `last_sent_batch`
 
 Rules:
 
 - `users.json` is separate
 - pricing, discounts, promotions, payment config, and backup metadata are in one combined config file
-- only one backup copy is kept when writing JSON
-- no historical config retention is required
+- no historical config retention is required beyond the latest sent batch
 - one active config plus at most one upcoming config is allowed
 
 ### Google Sheets
@@ -87,7 +88,7 @@ Split:
 
 ### OAuth
 
-Admin and reseller users authenticate with Google OAuth only.
+Admin and reseller users authenticate with Google OAuth only through the Worker.
 
 Stored user fields:
 
@@ -295,9 +296,9 @@ If scheduled backup fails:
 
 ## 10. API Surface
 
-### Admin / reseller server endpoints
+### Admin / reseller endpoints
 
-Implemented in [`backend/server.mjs`](C:\workspace\subscription_server\backend\server.mjs):
+Implemented in [`backend/worker.mjs`](C:\workspace\subscription_server\backend\worker.mjs):
 
 - `/v1/auth/google/start`
 - `/v1/auth/google/callback`
@@ -331,8 +332,6 @@ These are not fully implemented yet:
 - production deployment of the new Node backend
 - client app UI inside this repository
 
-## 12. Legacy Note
+## 12. Reference Note
 
-[`backend/worker.mjs`](C:\workspace\subscription_server\backend\worker.mjs) is legacy from the earlier Worker-first architecture.
-
-It is no longer the target system design.
+[`backend/server.mjs`](C:\workspace\subscription_server\backend\server.mjs) remains in the repository as a reference artifact from the temporary server-first refactor, but it is not the target deployment path.

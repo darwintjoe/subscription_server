@@ -5,6 +5,12 @@ const PURCHASE_DURATIONS = ["6_months", "12_months"];
 const PAYMENT_METHODS = ["qris", "card"];
 const FLOW_TYPES = ["direct_subscribe", "reseller_code", "bulk_printed_card"];
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const USER_STATUSES = ["active", "inactive"];
+const USER_ROLES = ["admin", "reseller"];
+const STORE_USERS_KEY = "users";
+const STORE_CONFIG_KEY = "config";
+const STORE_QUEUE_KEY = "backup_queue";
+const STORE_LAST_BATCH_KEY = "last_sent_batch";
 const DEFAULT_PAYMENT_METHODS = {
   qris: { enabled: true, provider: "xendit" },
   card: { enabled: true, provider: "stripe" },
@@ -30,13 +36,13 @@ async function router(request, env, ctx) {
   const db = requireDb(env);
 
   if (request.method === "GET" && path === "/health") {
-    return json({ ok: true, service: "subscription-server", storage: "d1" });
+    return json({ ok: true, service: "subscription-server", storage: "kv+d1" });
   }
 
   if (request.method === "POST" && path === "/v1/auth/google/callback") {
     const limited = await enforceRateLimit(request, db, "auth_google_callback", 20, 60);
     if (limited) return limited;
-    return handleGoogleCallback(request, env, db);
+    return handleGoogleCallbackV2(request, env);
   }
 
   if (request.method === "GET" && path === "/v1/auth/google/start") {
@@ -48,119 +54,99 @@ async function router(request, env, ctx) {
   if (request.method === "GET" && path === "/v1/auth/google/callback") {
     const limited = await enforceRateLimit(request, db, "auth_google_oauth_callback", 20, 60);
     if (limited) return limited;
-    return handleGoogleOauthCallback(request, env, db);
+    return handleGoogleOauthCallbackV2(request, env);
   }
 
   if (request.method === "POST" && path === "/v1/auth/refresh") {
-    return handleRefresh(request, db);
+    return handleRefreshV2(request, env);
   }
 
   if (request.method === "GET" && path === "/v1/me") {
-    const auth = await requireAuth(request, db);
+    const auth = await requireAuthV2(request, env);
     if (auth.response) return auth.response;
     return json({ user: sanitizeUser(auth.user) });
   }
 
   if (request.method === "POST" && path === "/v1/pricing/quote") {
-    const body = await readJson(request);
-    const duration = body.duration_code;
-    if (!PURCHASE_DURATIONS.includes(duration)) return json({ error: "invalid_duration" }, 400);
-    const config = await getAppConfig(db);
-    const country = (body.country_code || request.headers.get("CF-IPCountry") || "").toUpperCase();
-    const quote = resolveQuote(config.pricing, country, duration);
-    return json({
-      country_code: country || null,
-      used_fallback: !config.pricing[country],
-      duration_code: duration,
-      currency: quote.currency,
-      amount_minor: quote.amount_minor,
-    });
+    return handlePricingQuoteV2(request, env);
   }
 
-  if (request.method === "POST" && path === "/v1/payments/intents") {
-    const auth = await optionalAuth(request, db);
-    return handleCreatePaymentIntent(request, db, auth.user || null);
+  if (request.method === "POST" && path === "/v1/client/subscription/quote") {
+    return handleClientSubscriptionQuoteV2(request, env);
   }
 
-  if (request.method === "GET" && path.startsWith("/v1/payments/intents/")) {
-    const auth = await requireAuth(request, db);
-    if (auth.response) return auth.response;
-    return handleGetPaymentIntent(path.split("/").pop(), db, auth.user);
+  if (request.method === "POST" && path === "/v1/client/subscription/direct") {
+    return handleDirectSubscribeV2(request, env, db);
   }
 
-  if (request.method === "POST" && (path.startsWith("/v1/webhooks/payments/") || path === "/v1/webhooks/payments/mock")) {
-    return handlePaymentWebhook(request, db, path);
+  if (request.method === "POST" && path === "/v1/client/subscription/redeem") {
+    const limited = await enforceRateLimit(request, db, "client_codes_redeem", 10, 60);
+    if (limited) return limited;
+    return handleRedeemCodeV2(request, env, db);
   }
 
   if (request.method === "POST" && path === "/v1/codes/issue") {
-    const auth = await optionalAuth(request, db);
-    return handleIssueCode(request, env, ctx, db, auth.user || null);
+    const auth = await optionalAuthV2(request, env);
+    return handleIssueCodeV2(request, env, db, auth.user || null);
   }
 
   if (request.method === "POST" && path === "/v1/codes/redeem") {
     const limited = await enforceRateLimit(request, db, "codes_redeem", 10, 60);
     if (limited) return limited;
-    const auth = await optionalAuth(request, db);
-    return handleRedeemCode(request, env, ctx, db, auth.user || null);
-  }
-
-  if (request.method === "POST" && path === "/v1/test/codes/issue") {
-    const limited = await enforceRateLimit(request, db, "test_codes_issue", 3, 60 * 60);
-    if (limited) return limited;
-    return handleIssueTestCode(request, env, ctx, db);
+    const auth = await optionalAuthV2(request, env);
+    return handleRedeemCodeV2(request, env, db, auth.user || null);
   }
 
   if (request.method === "GET" && path === "/v1/admin/config") {
-    const auth = await requireAdmin(request, db);
+    const auth = await requireAdminV2(request, env);
     if (auth.response) return auth.response;
-    const config = await getAppConfig(db);
+    const config = await getAppConfigV2(env);
     return json({ config });
   }
 
   if (request.method === "PUT" && path === "/v1/admin/config") {
-    const auth = await requireAdmin(request, db);
+    const auth = await requireAdminV2(request, env);
     if (auth.response) return auth.response;
-    return handleUpdateConfig(request, db, auth.user);
+    return handleUpdateConfigV2(request, env, auth.user);
   }
 
   if (request.method === "GET" && path === "/v1/admin/users") {
-    const auth = await requireAdmin(request, db);
+    const auth = await requireAdminV2(request, env);
     if (auth.response) return auth.response;
-    const users = await listUsers(db);
+    const users = await listUsersV2(env);
     return json({ users });
   }
 
-  if (request.method === "PUT" && path.startsWith("/v1/admin/users/") && path.endsWith("/roles")) {
-    const auth = await requireAdmin(request, db);
+  if (request.method === "PUT" && path.startsWith("/v1/admin/users/")) {
+    const auth = await requireAdminV2(request, env);
     if (auth.response) return auth.response;
-    const userId = path.split("/")[4];
-    return handleUpdateRoles(request, db, auth.user, userId);
+    const userId = decodeURIComponent(path.split("/")[4] || "");
+    return handleUpdateUserV2(request, env, auth.user, userId);
   }
 
   if (request.method === "GET" && path === "/v1/admin/reports/summary") {
-    const auth = await requireAdmin(request, db);
+    const auth = await requireAdminV2(request, env);
     if (auth.response) return auth.response;
-    return json(await buildAdminSummary(db));
-  }
-
-  if (request.method === "GET" && path === "/v1/admin/orders") {
-    const auth = await requireAdmin(request, db);
-    if (auth.response) return auth.response;
-    const orders = await listOrders(db);
-    return json({ orders });
+    return json(await buildAdminSummaryV2(env, db));
   }
 
   if (request.method === "GET" && path === "/v1/admin/codes") {
-    const auth = await requireAdmin(request, db);
+    const auth = await requireAdminV2(request, env);
     if (auth.response) return auth.response;
-    const codes = await listCodes(db);
+    const codes = await listCodesV2(db);
     return json({ codes });
   }
 
   if (request.method === "POST" && path === "/v1/admin/code-batches") {
-    const auth = await requireAdmin(request, db);
+    const auth = await requireAdminV2(request, env);
     if (auth.response) return auth.response;
-    return handleCreateCodeBatch(request, db, auth.user);
+    return handleCreateCodeBatchV2(request, env, db, auth.user);
+  }
+
+  if (request.method === "POST" && path === "/v1/admin/backup") {
+    const auth = await requireAdminV2(request, env);
+    if (auth.response) return auth.response;
+    return handleManualBackupV2(env);
   }
 
   return json({ error: "not_found" }, 404);
@@ -775,6 +761,621 @@ async function maybeCleanupExpiredRateLimits(db, nowSeconds) {
     DELETE FROM rate_limits
     WHERE expires_at < ?
   `).bind(new Date(nowSeconds * 1000).toISOString()).run();
+}
+
+async function handleGoogleCallbackV2(request, env) {
+  const body = await readJson(request);
+  if (!body.id_token) return json({ error: "id_token_required" }, 400);
+
+  const googleUser = await verifyGoogleIdentity(body.id_token, env);
+  const user = await upsertGoogleUserV2(env, googleUser, request);
+  if (user.status !== "active") return json({ error: "user_inactive" }, 403);
+  const config = await getAppConfigV2(env);
+  const session = await createSessionTokensV2(env, user);
+  return json({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_in: ACCESS_TTL_SECONDS,
+    user: sanitizeUser(user),
+    auth_mode: config.google_oauth_mode,
+    onboarding_rule: config.onboarding_rule,
+  });
+}
+
+async function handleGoogleOauthCallbackV2(request, env) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+  if (error) return oauthBounce(deriveReturnUrlFromState(state, request), { error });
+  if (!code) return oauthBounce(deriveReturnUrlFromState(state, request), { error: "code_required" });
+
+  try {
+    const tokenData = await exchangeAuthorizationCode(request, env, code);
+    const googleUser = await fetchGoogleUserProfile(tokenData.access_token);
+    const user = await upsertGoogleUserV2(env, googleUser, request);
+    if (user.status !== "active") return oauthBounce(deriveReturnUrlFromState(state, request), { error: "user_inactive" });
+    const config = await getAppConfigV2(env);
+    const session = await createSessionTokensV2(env, user);
+    return oauthBounce(deriveReturnUrlFromState(state, request), {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_in: ACCESS_TTL_SECONDS,
+      auth_mode: config.google_oauth_mode,
+      onboarding_rule: config.onboarding_rule,
+      user: sanitizeUser(user),
+    });
+  } catch (exchangeError) {
+    return oauthBounce(deriveReturnUrlFromState(state, request), { error: exchangeError.message });
+  }
+}
+
+async function handleRefreshV2(request, env) {
+  const body = await readJson(request);
+  if (!body.refresh_token) return json({ error: "refresh_token_required" }, 400);
+  let payload;
+  try {
+    payload = await verifySignedTokenV2(env, body.refresh_token, "refresh");
+  } catch (error) {
+    return json({ error: error.message }, 401);
+  }
+  const users = await loadUsersStore(env);
+  const user = users[payload.email];
+  if (!user || user.status !== "active") return json({ error: "user_inactive" }, 401);
+  const session = await createSessionTokensV2(env, user);
+  return json({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_in: ACCESS_TTL_SECONDS,
+    user: sanitizeUser(user),
+  });
+}
+
+async function handlePricingQuoteV2(request, env) {
+  const body = await readJson(request);
+  const duration = body.duration_code;
+  if (!PURCHASE_DURATIONS.includes(duration)) return json({ error: "invalid_duration" }, 400);
+  const auth = await optionalAuthV2(request, env);
+  const audience = auth.user && auth.user.role === "reseller" ? "reseller" : "app";
+  const config = await getAppConfigV2(env);
+  const country = detectRequestCountry(request);
+  const quote = resolveQuoteV2(config.active, country, duration, audience);
+  return json({
+    country_code: country === "fallback" ? null : country,
+    used_fallback: !config.active.pricing[country],
+    duration_code: duration,
+    currency: quote.currency,
+    amount_minor: quote.amount_minor,
+    audience,
+    adjustment: quote.adjustment,
+  });
+}
+
+async function handleClientSubscriptionQuoteV2(request, env) {
+  const config = await getAppConfigV2(env);
+  const country = detectRequestCountry(request);
+  const quote = resolveQuoteV2(config.active, country, "12_months", "app");
+  return json({
+    country_code: country === "fallback" ? null : country,
+    used_fallback: !config.active.pricing[country],
+    duration_code: "12_months",
+    currency: quote.currency,
+    amount_minor: quote.amount_minor,
+    audience: "app",
+    adjustment: quote.adjustment,
+    client_flow: "direct_subscribe",
+  });
+}
+
+async function handleDirectSubscribeV2(request, env, db) {
+  const body = await readJson(request);
+  return handleIssueCodeV2(new Request(request.url, {
+    method: "POST",
+    headers: request.headers,
+    body: JSON.stringify({
+      duration_code: "12_months",
+      source: "direct",
+      external_payment_id: body.external_payment_id,
+      payment_method: body.payment_method,
+      currency: body.currency,
+      amount_minor: body.amount_minor,
+    }),
+  }), env, db, null);
+}
+
+async function handleIssueCodeV2(request, env, db, user) {
+  const body = await readJson(request);
+  const durationCode = String(body.duration_code || "");
+  const source = String(body.source || (user && user.role === "reseller" ? "reseller" : "direct"));
+  const externalPaymentId = String(body.external_payment_id || "").trim();
+  if (!PURCHASE_DURATIONS.includes(durationCode)) return json({ error: "invalid_duration" }, 400);
+  if (!["direct", "reseller", "gift_card"].includes(source)) return json({ error: "invalid_source" }, 400);
+  if (!externalPaymentId) return json({ error: "external_payment_id_required" }, 400);
+  if (source === "gift_card") return json({ error: "gift_card_issue_requires_batch" }, 409);
+
+  const existing = await db.prepare(`
+    SELECT id, code_value, flow_type, duration_code, status, payment_ref, redeem_expires_at, redeemed_at, created_at
+    FROM codes WHERE payment_ref = ?
+  `).bind(externalPaymentId).first();
+  if (existing) {
+    return json(source === "direct" ? await serializeDirectSubscriptionV2(existing, env) : serializeCodeRowV2(existing));
+  }
+
+  const codeId = crypto.randomUUID();
+  const codeValue = await createReadableCodeValue(db, durationCode);
+  const now = new Date();
+  const redeemedAt = source === "direct" ? now.toISOString() : null;
+  const redeemExpiresAt = source === "reseller" ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
+  const flow = source === "direct" ? "direct_subscribe" : "reseller_code";
+  const status = source === "direct" ? "redeemed" : "issued";
+  await createCodeRecord(db, {
+    codeId,
+    codeValue,
+    flow,
+    durationCode,
+    status,
+    paymentRef: externalPaymentId,
+    issuedByUserRef: user ? user.id : null,
+    redeemExpiresAt,
+    redeemedAt,
+    redeemedByUserRef: source === "direct" ? "app_client" : null,
+    metadataJson: JSON.stringify({ source }),
+  });
+  if (source === "direct") {
+    await createCodeRedemption(db, {
+      redemptionId: crypto.randomUUID(),
+      codeId,
+      redeemedByUserRef: "app_client",
+      redeemedContext: "direct_subscribe_auto_redeem",
+    });
+  }
+  await enqueueRegularRowV2(env, {
+    event_type: source === "direct" ? "direct_subscribe" : "reseller_code_issued",
+    source,
+    code_value: codeValue,
+    duration_code: durationCode,
+    external_payment_id: externalPaymentId,
+    payment_method: body.payment_method || null,
+    currency: body.currency || null,
+    amount_minor: body.amount_minor ?? null,
+    payment_country: detectRequestCountry(request),
+    actor_email: user ? user.email : null,
+    status,
+    generated_at: now.toISOString(),
+    redeemed_at: redeemedAt,
+  });
+  const row = { id: codeId, code_value: codeValue, flow_type: flow, duration_code: durationCode, status, payment_ref: externalPaymentId, redeem_expires_at: redeemExpiresAt, redeemed_at: redeemedAt, created_at: now.toISOString() };
+  return json(source === "direct" ? await serializeDirectSubscriptionV2(row, env) : serializeCodeRowV2(row), 201);
+}
+
+async function handleRedeemCodeV2(request, env, db, user = null) {
+  const body = await readJson(request);
+  const codeValue = normalizeCodeValue(body.code_value);
+  if (!isReadableCodeFormat(codeValue)) return json({ error: "invalid_code_format" }, 409);
+  const rec = await db.prepare(`SELECT id, code_value, flow_type, duration_code, status, payment_ref, redeem_expires_at, redeemed_at, created_at FROM codes WHERE code_value = ?`).bind(codeValue).first();
+  if (!rec) return json({ error: "code_not_found" }, 404);
+  if (rec.status === "redeemed") return json({ error: "already_redeemed" }, 409);
+  if (rec.redeem_expires_at && Date.now() > Date.parse(rec.redeem_expires_at)) return json({ error: "expired_code" }, 409);
+  const redeemedAt = new Date().toISOString();
+  const updated = await markCodeRedeemed(db, { codeId: rec.id, redeemedAt, redeemedByUserRef: user ? user.id : "app_client" });
+  if (!updated) return json({ error: "already_redeemed" }, 409);
+  await createCodeRedemption(db, {
+    redemptionId: crypto.randomUUID(),
+    codeId: rec.id,
+    redeemedByUserRef: user ? user.id : "app_client",
+    redeemedContext: user ? "api_redeem" : "client_code_redeem",
+  });
+  await enqueueRegularRowV2(env, {
+    event_type: "code_redeemed",
+    source: mapSourceFromFlowTypeV2(rec.flow_type),
+    code_value: rec.code_value,
+    duration_code: rec.duration_code,
+    external_payment_id: rec.payment_ref,
+    payment_country: detectRequestCountry(request),
+    actor_email: user ? user.email : null,
+    status: "redeemed",
+    generated_at: rec.created_at,
+    redeemed_at: redeemedAt,
+  });
+  return json({
+    ok: true,
+    code_value: rec.code_value,
+    duration_code: rec.duration_code,
+    redeemed_at: redeemedAt,
+    subscription_token: await issueSubscriptionTokenV2(env, rec.duration_code, redeemedAt),
+  });
+}
+
+async function handleUpdateConfigV2(request, env, actor) {
+  const current = await getAppConfigV2(env);
+  const body = await readJson(request);
+  const next = validateCombinedConfigV2({
+    google_oauth_mode: current.google_oauth_mode,
+    onboarding_rule: current.onboarding_rule,
+    active: body.active || current.active,
+    upcoming: body.upcoming !== undefined ? body.upcoming : current.upcoming,
+    backup: { ...current.backup, ...(body.backup || {}) },
+  });
+  await putStoreJson(env, STORE_CONFIG_KEY, next);
+  return json({ ok: true, config: next, updated_by: actor.email });
+}
+
+async function handleUpdateUserV2(request, env, actor, userId) {
+  const body = await readJson(request);
+  if (userId === actor.email) return json({ error: "self_modification_forbidden" }, 409);
+  const users = await loadUsersStore(env);
+  const user = users[userId];
+  if (!user) return json({ error: "user_not_found" }, 404);
+  const role = body.role !== undefined ? String(body.role) : user.role;
+  const status = body.status !== undefined ? String(body.status) : user.status;
+  if (!USER_ROLES.includes(role)) return json({ error: "invalid_role" }, 400);
+  if (!USER_STATUSES.includes(status)) return json({ error: "invalid_status" }, 400);
+  users[userId] = { ...user, role, status, updated_at: new Date().toISOString() };
+  await putStoreJson(env, STORE_USERS_KEY, users);
+  return json({ ok: true, user: sanitizeUser(users[userId]) });
+}
+
+async function handleCreateCodeBatchV2(request, env, db, user) {
+  const body = await readJson(request);
+  if (!Number.isInteger(body.quantity) || body.quantity < 1) return json({ error: "invalid_quantity" }, 400);
+  if (!PURCHASE_DURATIONS.includes(body.duration_code)) return json({ error: "invalid_duration" }, 400);
+  const batch = {
+    id: crypto.randomUUID(),
+    created_by_user_ref: user.id,
+    quantity: body.quantity,
+    duration_code: body.duration_code,
+    expiry_policy: "fixed_12_months",
+    notes: body.notes || null,
+    metadata_json: JSON.stringify({ created_via: "admin_console", source: "gift_card_batch" }),
+  };
+  await db.prepare(`
+    INSERT INTO code_batches (id, created_by_user_ref, quantity, duration_code, expiry_policy, notes, metadata_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(batch.id, batch.created_by_user_ref, batch.quantity, batch.duration_code, batch.expiry_policy, batch.notes, batch.metadata_json).run();
+  const codes = [];
+  for (let index = 0; index < batch.quantity; index += 1) {
+    const codeId = crypto.randomUUID();
+    const codeValue = await createReadableCodeValue(db, batch.duration_code);
+    await createCodeRecord(db, {
+      codeId,
+      codeValue,
+      flow: "bulk_printed_card",
+      durationCode: batch.duration_code,
+      status: "issued",
+      paymentRef: `gift-batch:${batch.id}`,
+      issuedByUserRef: user.id,
+      redeemExpiresAt: null,
+      redeemedAt: null,
+      redeemedByUserRef: null,
+      metadataJson: JSON.stringify({ source: "gift_card", batch_id: batch.id }),
+    });
+    await db.prepare(`INSERT INTO code_batch_items (batch_id, code_id) VALUES (?, ?)`).bind(batch.id, codeId).run();
+    codes.push(codeValue);
+  }
+  await enqueueBulkRowV2(env, {
+    event_type: "gift_card_batch_issued",
+    batch_id: batch.id,
+    note: batch.notes,
+    quantity: batch.quantity,
+    duration_code: batch.duration_code,
+    actor_email: user.email,
+    generated_at: new Date().toISOString(),
+    codes,
+  });
+  return json({ ok: true, batch_id: batch.id, quantity: batch.quantity, duration_code: batch.duration_code, codes }, 201);
+}
+
+async function handleManualBackupV2(env) {
+  const queue = await getStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
+  if (!(queue.regular?.length || queue.bulk?.length)) return json({ ok: true, sent: false, detail: "queue_empty" });
+  const sentAt = new Date().toISOString();
+  await putStoreJson(env, STORE_LAST_BATCH_KEY, { sent_at: sentAt, regular: queue.regular || [], bulk: queue.bulk || [] });
+  await putStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
+  const config = await getAppConfigV2(env);
+  config.backup.last_backup_at = sentAt;
+  config.backup.last_sent_batch_at = sentAt;
+  await putStoreJson(env, STORE_CONFIG_KEY, config);
+  return json({ ok: true, sent: true, last_backup_at: sentAt, regular_rows: queue.regular.length, bulk_rows: queue.bulk.length });
+}
+
+async function requireAuthV2(request, env) {
+  const token = getBearerTokenV2(request);
+  if (!token) return { response: json({ error: "unauthorized" }, 401) };
+  let payload;
+  try {
+    payload = await verifySignedTokenV2(env, token, "access");
+  } catch (error) {
+    return { response: json({ error: error.message }, 401) };
+  }
+  const users = await loadUsersStore(env);
+  const user = users[payload.email];
+  if (!user || user.status !== "active") return { response: json({ error: "user_inactive" }, 401) };
+  return { user: mapStoredUserV2(user) };
+}
+
+async function optionalAuthV2(request, env) {
+  const token = getBearerTokenV2(request);
+  if (!token) return { user: null };
+  const auth = await requireAuthV2(request, env);
+  return auth.response ? { user: null } : auth;
+}
+
+async function requireAdminV2(request, env) {
+  const auth = await requireAuthV2(request, env);
+  if (auth.response) return auth;
+  if (!auth.user.roles.includes("admin")) return { response: json({ error: "forbidden" }, 403) };
+  return auth;
+}
+
+async function listUsersV2(env) {
+  const users = await loadUsersStore(env);
+  return Object.values(users).sort((a, b) => a.email.localeCompare(b.email)).map((user) => sanitizeUser(mapStoredUserV2(user)));
+}
+
+async function buildAdminSummaryV2(env, db) {
+  const queue = await getStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
+  const users = await loadUsersStore(env);
+  const countRow = await db.prepare(`SELECT COUNT(*) AS count FROM codes`).first();
+  const lastBatch = await getStoreJson(env, STORE_LAST_BATCH_KEY, { regular: [], bulk: [] });
+  return {
+    cards: {
+      subscriptions_sold: Number(countRow?.count || 0),
+      revenue_total: summarizeTopCurrencyV2(lastBatch.regular || []),
+      pending_backup_today: (queue.regular || []).length + (queue.bulk || []).length,
+      active_resellers: Object.values(users).filter((user) => user.role === "reseller" && user.status === "active").length,
+    },
+  };
+}
+
+async function listCodesV2(db) {
+  const rows = await db.prepare(`
+    SELECT id, code_value, flow_type, duration_code, status, payment_ref, redeem_expires_at, redeemed_at, created_at
+    FROM codes ORDER BY created_at DESC LIMIT 200
+  `).all();
+  return (rows.results || []).map((row) => serializeCodeRowV2(row));
+}
+
+async function getAppConfigV2(env) {
+  const config = validateCombinedConfigV2(await getStoreJson(env, STORE_CONFIG_KEY, defaultConfigV2()));
+  if (config.upcoming && Date.parse(config.upcoming.effective_at) <= Date.now()) {
+    const next = { ...config, active: config.upcoming.config, upcoming: null };
+    await putStoreJson(env, STORE_CONFIG_KEY, next);
+    return next;
+  }
+  return config;
+}
+
+async function loadUsersStore(env) {
+  return await getStoreJson(env, STORE_USERS_KEY, {});
+}
+
+async function upsertGoogleUserV2(env, googleUser, request) {
+  const users = await loadUsersStore(env);
+  const email = String(googleUser.email || "").toLowerCase();
+  const now = new Date().toISOString();
+  const country = detectRequestCountry(request);
+  if (users[email]) {
+    users[email] = { ...users[email], name: googleUser.name || users[email].name || email, country, updated_at: now };
+  } else {
+    users[email] = { name: googleUser.name || email, email, country, role: Object.keys(users).length === 0 ? "admin" : "reseller", status: "active", created_at: now, updated_at: now };
+  }
+  await putStoreJson(env, STORE_USERS_KEY, users);
+  return mapStoredUserV2(users[email]);
+}
+
+async function createSessionTokensV2(env, user) {
+  return {
+    access_token: await signTokenV2(env, { typ: "access", email: user.email, role: user.role || highestRole(user.roles), exp: Math.floor(Date.now() / 1000) + ACCESS_TTL_SECONDS }),
+    refresh_token: await signTokenV2(env, { typ: "refresh", email: user.email, role: user.role || highestRole(user.roles), exp: Math.floor(Date.now() / 1000) + REFRESH_TTL_SECONDS }),
+  };
+}
+
+async function issueSubscriptionTokenV2(env, durationCode, redeemedAt) {
+  const expiry = computeExpiryV2(durationCode, redeemedAt);
+  return signTokenV2(env, { typ: "subscription", ver: "v1", exp: Math.floor(Date.parse(expiry) / 1000) });
+}
+
+async function signTokenV2(env, payload) {
+  const serialized = b64url(new TextEncoder().encode(JSON.stringify(payload)));
+  const signature = await signValueV2(env, serialized);
+  return `${serialized}.${signature}`;
+}
+
+async function verifySignedTokenV2(env, token, expectedType) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 2) throw new Error("invalid_token");
+  const [serialized, signature] = parts;
+  const expectedSignature = await signValueV2(env, serialized);
+  if (signature !== expectedSignature) throw new Error("invalid_token");
+  const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(serialized)));
+  if (payload.typ !== expectedType) throw new Error("invalid_token_type");
+  if (Number(payload.exp || 0) <= Math.floor(Date.now() / 1000)) throw new Error(`${expectedType}_token_expired`);
+  return payload;
+}
+
+async function signValueV2(env, value) {
+  const secret = env.TOKEN_SECRET || env.GOOGLE_CLIENT_SECRET || "dev-only-token-secret";
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
+  return b64url(new Uint8Array(sig));
+}
+
+function getBearerTokenV2(request) {
+  const header = String(request.headers.get("authorization") || "");
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
+
+async function getStoreJson(env, key, fallback) {
+  if (!env.APP_STORE) return fallback;
+  const raw = await env.APP_STORE.get(key);
+  return raw ? JSON.parse(raw) : fallback;
+}
+
+async function putStoreJson(env, key, value) {
+  if (!env.APP_STORE) throw new Error("app_store_not_configured");
+  await env.APP_STORE.put(key, JSON.stringify(value));
+}
+
+function defaultConfigV2() {
+  return {
+    google_oauth_mode: "google_oauth_only",
+    onboarding_rule: "first_user_admin",
+    active: {
+      payment_methods: DEFAULT_PAYMENT_METHODS,
+      pricing: {
+        ID: { "6_months": { currency: "IDR", amount_minor: 699000 }, "12_months": { currency: "IDR", amount_minor: 999000 } },
+        MY: { "6_months": { currency: "MYR", amount_minor: 199 }, "12_months": { currency: "MYR", amount_minor: 299 } },
+        SG: { "6_months": { currency: "SGD", amount_minor: 69 }, "12_months": { currency: "SGD", amount_minor: 99 } },
+        TH: { "6_months": { currency: "THB", amount_minor: 1499 }, "12_months": { currency: "THB", amount_minor: 1999 } },
+        fallback: { "6_months": { currency: "USD", amount_minor: 6900 }, "12_months": { currency: "USD", amount_minor: 9900 } },
+      },
+      reseller_discounts: {},
+      promotions: [],
+    },
+    upcoming: null,
+    backup: { timezone: "UTC+7", daily_run_time: "03:00", last_backup_at: null, sheet_prefix: "Subscription", last_sent_batch_at: null },
+  };
+}
+
+function validateCombinedConfigV2(input) {
+  return {
+    google_oauth_mode: "google_oauth_only",
+    onboarding_rule: "first_user_admin",
+    active: validateConfigPayloadV2(input.active || {}),
+    upcoming: input.upcoming ? { effective_at: new Date(input.upcoming.effective_at).toISOString(), config: validateConfigPayloadV2(input.upcoming.config || {}) } : null,
+    backup: {
+      timezone: String(input.backup?.timezone || "UTC+7"),
+      daily_run_time: String(input.backup?.daily_run_time || "03:00"),
+      last_backup_at: input.backup?.last_backup_at || null,
+      sheet_prefix: String(input.backup?.sheet_prefix || "Subscription"),
+      last_sent_batch_at: input.backup?.last_sent_batch_at || null,
+    },
+  };
+}
+
+function validateConfigPayloadV2(input) {
+  const pricing = validatePricingConfig(input.pricing || defaultConfigV2().active.pricing);
+  const payment_methods = validatePaymentMethods(input.payment_methods || DEFAULT_PAYMENT_METHODS);
+  return {
+    pricing,
+    payment_methods,
+    reseller_discounts: input.reseller_discounts || {},
+    promotions: Array.isArray(input.promotions) ? input.promotions : [],
+  };
+}
+
+function resolveQuoteV2(activeConfig, countryCode, duration, audience) {
+  const selectedCountry = activeConfig.pricing[countryCode] ? countryCode : "fallback";
+  const base = activeConfig.pricing[selectedCountry][duration];
+  const candidates = [];
+  if (audience === "reseller" && activeConfig.reseller_discounts?.[selectedCountry]) {
+    const discount = activeConfig.reseller_discounts[selectedCountry];
+    candidates.push({ amount_minor: applyAdjustmentV2(base.amount_minor, discount), adjustment: { kind: "reseller_discount", ...discount } });
+  }
+  for (const promotion of activeConfig.promotions || []) {
+    if (!promotion.targets?.includes(audience)) continue;
+    if (!promotion.countries?.includes(selectedCountry)) continue;
+    if (promotion.starts_at && Date.now() < Date.parse(promotion.starts_at)) continue;
+    if (promotion.ends_at && Date.now() > Date.parse(promotion.ends_at)) continue;
+    candidates.push({ amount_minor: applyAdjustmentV2(base.amount_minor, promotion), adjustment: { kind: "promotion", id: promotion.id, type: promotion.type } });
+  }
+  let selected = { amount_minor: base.amount_minor, adjustment: null };
+  for (const candidate of candidates) if (candidate.amount_minor < selected.amount_minor) selected = candidate;
+  return { currency: base.currency, amount_minor: selected.amount_minor, adjustment: selected.adjustment };
+}
+
+function applyAdjustmentV2(baseAmountMinor, adjustment) {
+  if (adjustment.type === "fixed") return Math.max(0, baseAmountMinor - Number(adjustment.value_minor || 0));
+  return Math.max(0, Math.round(baseAmountMinor * (100 - Number(adjustment.value || 0)) / 100));
+}
+
+function detectRequestCountry(request) {
+  const raw = String(request.headers.get("CF-IPCountry") || request.headers.get("x-vercel-ip-country") || request.headers.get("x-country-code") || "").trim().toUpperCase();
+  if (!raw || raw === "XX" || raw === "T1") return "fallback";
+  return /^[A-Z]{2}$/.test(raw) ? raw : "fallback";
+}
+
+function mapStoredUserV2(user) {
+  return {
+    id: user.email,
+    email: user.email,
+    display_name: user.name,
+    picture_url: null,
+    country: user.country,
+    role: user.role,
+    roles: [user.role],
+    status: user.status,
+  };
+}
+
+async function enqueueRegularRowV2(env, row) {
+  const queue = await getStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
+  queue.regular.push({ id: crypto.randomUUID(), queued_at: new Date().toISOString(), ...row });
+  await putStoreJson(env, STORE_QUEUE_KEY, queue);
+}
+
+async function enqueueBulkRowV2(env, row) {
+  const queue = await getStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
+  queue.bulk.push({ id: crypto.randomUUID(), queued_at: new Date().toISOString(), ...row });
+  await putStoreJson(env, STORE_QUEUE_KEY, queue);
+}
+
+function serializeCodeRowV2(row) {
+  return {
+    id: row.id,
+    code_value: row.code_value,
+    source: mapSourceFromFlowTypeV2(row.flow_type),
+    duration_code: row.duration_code,
+    status: row.status,
+    external_payment_id: row.payment_ref,
+    redeem_expires_at: row.redeem_expires_at || null,
+    redeemed_at: row.redeemed_at || null,
+    created_at: row.created_at || null,
+  };
+}
+
+async function serializeDirectSubscriptionV2(row, env) {
+  const redeemedAt = row.redeemed_at || new Date().toISOString();
+  const subscribedUntil = computeExpiryV2(row.duration_code, redeemedAt);
+  return {
+    ok: true,
+    subscription_token: await issueSubscriptionTokenV2(env, row.duration_code, redeemedAt),
+    subscribed_until: subscribedUntil,
+    code_value: row.code_value,
+    duration_code: row.duration_code,
+    redeemed_at: redeemedAt,
+  };
+}
+
+function mapSourceFromFlowTypeV2(flowType) {
+  if (flowType === "direct_subscribe") return "direct";
+  if (flowType === "bulk_printed_card") return "gift_card";
+  return "reseller";
+}
+
+function summarizeTopCurrencyV2(rows) {
+  const totals = {};
+  for (const row of rows) {
+    if (!row.currency) continue;
+    if (!totals[row.currency]) totals[row.currency] = { count: 0, amount_minor: 0 };
+    totals[row.currency].count += 1;
+    totals[row.currency].amount_minor += Number(row.amount_minor || 0);
+  }
+  let best = null;
+  let bestCurrency = null;
+  for (const [currency, value] of Object.entries(totals)) {
+    if (!best || value.count > best.count) {
+      best = value;
+      bestCurrency = currency;
+    }
+  }
+  return best ? `${bestCurrency} ${best.amount_minor}` : "-";
+}
+
+function computeExpiryV2(durationCode, fromIso) {
+  const date = new Date(fromIso);
+  date.setUTCMonth(date.getUTCMonth() + (durationCode === "6_months" ? 6 : 12));
+  return date.toISOString();
 }
 
 async function getAppConfig(db) {

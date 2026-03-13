@@ -6,3 +6,7 @@ compatibility_date = "2026-03-09"
 binding = "DB"
 database_name = "subscription-live"
 database_id = "fc35beaa-95de-478a-96c8-d7d8ecbece2a"
+
+[[kv_namespaces]]
+binding = "APP_STORE"
+id = "25b327713c9340f1980284545056feda"

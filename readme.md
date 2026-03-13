@@ -1,15 +1,16 @@
 # Subscription Server
 
 Current direction:
-- `backend/server.mjs` is the main writable backend server for admin/reseller auth, JSON config, queue files, and client-app integration.
-- Cloudflare D1 remains the code store only.
-- The old Cloudflare Worker in `backend/worker.mjs` is legacy and no longer the target architecture.
+- `backend/worker.mjs` is the main backend runtime.
+- Cloudflare KV stores users, config, and backup queue state.
+- Cloudflare D1 stores code records only.
+- `backend/server.mjs` is an experimental local refactor artifact and is not the target deployment path.
 
 ## What is implemented
 - `backend/server.mjs`
-  Main backend server using local JSON files for users/config/backup queue, and Cloudflare D1 for code records.
+  Experimental local refactor artifact kept for reference only.
 - `backend/worker.mjs`
-  Legacy Cloudflare Worker implementation from the earlier architecture.
+  Main Cloudflare Worker backend using KV for users/config/backup queue and D1 for code records.
 - `frontend/admin`
   Static admin dashboard for login, config management, user roles, orders, and code reporting.
 - `frontend/reseller`
