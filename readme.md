@@ -1,9 +1,15 @@
 # Subscription Server
 
+Current direction:
+- `backend/server.mjs` is the main writable backend server for admin/reseller auth, JSON config, queue files, and client-app integration.
+- Cloudflare D1 remains the code store only.
+- The old Cloudflare Worker in `backend/worker.mjs` is legacy and no longer the target architecture.
+
 ## What is implemented
+- `backend/server.mjs`
+  Main backend server using local JSON files for users/config/backup queue, and Cloudflare D1 for code records.
 - `backend/worker.mjs`
-  Cloudflare Worker API backed by D1 for:
-  Google OAuth-only session bootstrap, first-user-admin onboarding, reseller/admin roles, pricing config, payment method config, payment intents, code issue/redeem, admin reporting, and Google Sheet backup hooks.
+  Legacy Cloudflare Worker implementation from the earlier architecture.
 - `frontend/admin`
   Static admin dashboard for login, config management, user roles, orders, and code reporting.
 - `frontend/reseller`
@@ -12,7 +18,7 @@
   D1 schema for users, sessions, app config, payment intents, audit events, codes, redemptions, and code batches.
 
 ## Required behavior now
-- Registration/login path: Google OAuth only
+- Registration/login path: Google OAuth only for admin/reseller
 - First registered user: `admin`
 - Next registered users: `reseller`
 - Admin can promote reseller to admin from the admin page
@@ -57,7 +63,14 @@ wrangler dev
 - The Worker fetches the Google user profile, creates or updates the app user, then redirects back to the admin page with app tokens in the URL fragment
 - If this is the first registered user, that user is created as `admin`.
 - Every later new user is created as `reseller`.
-- The Worker returns access and refresh tokens for API calls.
+- The main backend server returns access and refresh tokens for API calls.
+
+## Client app integration
+
+See [`docs/client-app-integration.md`](C:\workspace\subscription_server\docs\client-app-integration.md) for the client-app subscription endpoints:
+- `POST /v1/client/subscription/quote`
+- `POST /v1/client/subscription/direct`
+- `POST /v1/client/subscription/redeem`
 
 ## Google Sheet backup
 The Worker does not write directly to Google Sheets with end-user OAuth. Instead, the admin page configures a Google Apps Script or equivalent webhook endpoint in:

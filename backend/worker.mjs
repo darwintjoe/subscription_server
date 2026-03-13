@@ -34,14 +34,20 @@ async function router(request, env, ctx) {
   }
 
   if (request.method === "POST" && path === "/v1/auth/google/callback") {
+    const limited = await enforceRateLimit(request, db, "auth_google_callback", 20, 60);
+    if (limited) return limited;
     return handleGoogleCallback(request, env, db);
   }
 
   if (request.method === "GET" && path === "/v1/auth/google/start") {
+    const limited = await enforceRateLimit(request, db, "auth_google_start", 20, 60);
+    if (limited) return limited;
     return handleGoogleStart(request, env);
   }
 
   if (request.method === "GET" && path === "/v1/auth/google/callback") {
+    const limited = await enforceRateLimit(request, db, "auth_google_oauth_callback", 20, 60);
+    if (limited) return limited;
     return handleGoogleOauthCallback(request, env, db);
   }
 
@@ -92,11 +98,15 @@ async function router(request, env, ctx) {
   }
 
   if (request.method === "POST" && path === "/v1/codes/redeem") {
+    const limited = await enforceRateLimit(request, db, "codes_redeem", 10, 60);
+    if (limited) return limited;
     const auth = await optionalAuth(request, db);
     return handleRedeemCode(request, env, ctx, db, auth.user || null);
   }
 
   if (request.method === "POST" && path === "/v1/test/codes/issue") {
+    const limited = await enforceRateLimit(request, db, "test_codes_issue", 3, 60 * 60);
+    if (limited) return limited;
     return handleIssueTestCode(request, env, ctx, db);
   }
 
@@ -165,17 +175,8 @@ async function handleGoogleCallback(request, env, db) {
   const appConfig = await getAppConfig(db);
 
   if (!user) {
-    const userCount = await countUsers(db);
-    const roles = userCount === 0 ? ["admin"] : ["reseller"];
-    user = await createUser(db, googleUser, roles);
-
-    if (userCount === 0 && appConfig.sheet_owner_email == null) {
-      await db.prepare(`
-        UPDATE app_config
-        SET sheet_owner_user_id = ?, sheet_owner_email = ?, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        WHERE id = 'default'
-      `).bind(user.id, user.email).run();
-    }
+    user = await createUser(db, googleUser, ["reseller"]);
+    user = await promoteFirstUserToAdmin(db, user);
 
     await appendAuditEvent(db, {
       eventType: "user.created",
@@ -234,17 +235,17 @@ async function handleGoogleOauthCallback(request, env, db) {
     const appConfig = await getAppConfig(db);
 
     if (!user) {
-      const userCount = await countUsers(db);
-      const roles = userCount === 0 ? ["admin"] : ["reseller"];
-      user = await createUser(db, googleUser, roles);
+      user = await createUser(db, googleUser, ["reseller"]);
+      user = await promoteFirstUserToAdmin(db, user);
 
-      if (userCount === 0 && appConfig.sheet_owner_email == null) {
-        await db.prepare(`
-          UPDATE app_config
-          SET sheet_owner_user_id = ?, sheet_owner_email = ?, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-          WHERE id = 'default'
-        `).bind(user.id, user.email).run();
-      }
+      await appendAuditEvent(db, {
+        eventType: "user.created",
+        entityType: "user",
+        entityId: user.id,
+        actorUserRef: user.id,
+        actorRole: highestRole(user.roles),
+        payload: { email: user.email, roles: user.roles },
+      });
     } else {
       user = await updateUserProfile(db, user.id, googleUser);
     }
@@ -720,6 +721,62 @@ function requireDb(env) {
   return env.DB;
 }
 
+async function enforceRateLimit(request, db, bucketName, maxRequests, windowSeconds) {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const windowStartedAt = nowSeconds - (nowSeconds % windowSeconds);
+  const bucketKey = `${bucketName}:${getRateLimitClientKey(request)}:${windowStartedAt}`;
+  const expiresAt = new Date((windowStartedAt + windowSeconds) * 1000).toISOString();
+
+  await db.prepare(`
+    INSERT INTO rate_limits (bucket_key, window_started_at, request_count, expires_at)
+    VALUES (?, ?, 1, ?)
+    ON CONFLICT(bucket_key) DO UPDATE SET
+      request_count = rate_limits.request_count + 1,
+      expires_at = excluded.expires_at
+  `).bind(bucketKey, windowStartedAt, expiresAt).run();
+
+  const row = await db.prepare(`
+    SELECT request_count
+    FROM rate_limits
+    WHERE bucket_key = ?
+  `).bind(bucketKey).first();
+
+  await maybeCleanupExpiredRateLimits(db, nowSeconds);
+
+  const requestCount = Number(row?.request_count || 0);
+  if (requestCount <= maxRequests) return null;
+
+  const retryAfterSeconds = Math.max(1, windowStartedAt + windowSeconds - nowSeconds);
+  return new Response(JSON.stringify({
+    error: "rate_limited",
+    retry_after_seconds: retryAfterSeconds,
+  }), {
+    status: 429,
+    headers: {
+      "content-type": "application/json",
+      "retry-after": String(retryAfterSeconds),
+    },
+  });
+}
+
+function getRateLimitClientKey(request) {
+  const cloudflareIp = String(request.headers.get("CF-Connecting-IP") || "").trim();
+  if (cloudflareIp) return cloudflareIp;
+
+  const forwardedFor = String(request.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+  return forwardedFor || "unknown";
+}
+
+async function maybeCleanupExpiredRateLimits(db, nowSeconds) {
+  const sample = crypto.getRandomValues(new Uint8Array(1))[0];
+  if ((sample & 63) !== 0) return;
+
+  await db.prepare(`
+    DELETE FROM rate_limits
+    WHERE expires_at < ?
+  `).bind(new Date(nowSeconds * 1000).toISOString()).run();
+}
+
 async function getAppConfig(db) {
   const row = await db.prepare(`SELECT * FROM app_config WHERE id = 'default'`).first();
   if (!row) throw new Error("app_config_missing");
@@ -872,11 +929,6 @@ function oauthBounce(returnUrl, payload) {
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
-async function countUsers(db) {
-  const row = await db.prepare(`SELECT COUNT(*) AS count FROM users`).first();
-  return Number(row.count || 0);
-}
-
 async function createUser(db, googleUser, roles) {
   const user = {
     id: crypto.randomUUID(),
@@ -898,6 +950,29 @@ async function createUser(db, googleUser, roles) {
     user.roles_json,
   ).run();
   return mapUserRow(user);
+}
+
+async function promoteFirstUserToAdmin(db, user) {
+  const claim = await db.prepare(`
+    UPDATE app_config
+    SET sheet_owner_user_id = ?, sheet_owner_email = ?, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    WHERE id = 'default' AND sheet_owner_user_id IS NULL
+  `).bind(user.id, user.email).run();
+
+  if (!(claim.meta && claim.meta.changes)) {
+    return user;
+  }
+
+  await db.prepare(`
+    UPDATE users
+    SET roles_json = ?, updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    WHERE id = ?
+  `).bind(JSON.stringify(["admin"]), user.id).run();
+
+  return {
+    ...user,
+    roles: ["admin"],
+  };
 }
 
 async function updateUserProfile(db, userId, googleUser) {

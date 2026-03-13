@@ -1,0 +1,35 @@
+{
+  "sent_at": "2026-03-13T02:18:56.272Z",
+  "regular": [
+    {
+      "id": "bbda1754-4654-4327-93c1-d40c3239a4bc",
+      "queued_at": "2026-03-13T02:18:55.746Z",
+      "event_type": "reseller_code_issued",
+      "source": "reseller",
+      "code_value": "SM-12M-G6TK-9PYH",
+      "duration_code": "12_months",
+      "external_payment_id": "backup-test-1773368331909",
+      "payment_country": "TH",
+      "actor_email": "admin@example.com",
+      "status": "issued",
+      "generated_at": "2026-03-13T02:18:55.742Z",
+      "redeemed_at": null
+    }
+  ],
+  "bulk": [
+    {
+      "id": "c14ff41c-a6d3-4402-b0a6-165c99c84361",
+      "queued_at": "2026-03-13T02:18:56.243Z",
+      "event_type": "gift_card_batch_issued",
+      "batch_id": "dd7710f0-7d99-4e27-88bd-176f9a0d3d0c",
+      "note": "backup-test",
+      "quantity": 1,
+      "duration_code": "6_months",
+      "actor_email": "admin@example.com",
+      "generated_at": "2026-03-13T02:18:56.240Z",
+      "codes": [
+        "SM-6M-SC7J-QLG8"
+      ]
+    }
+  ]
+}

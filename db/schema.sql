@@ -118,6 +118,13 @@ CREATE TABLE IF NOT EXISTS code_batch_items (
   FOREIGN KEY (code_id) REFERENCES codes(id)
 );
 
+CREATE TABLE IF NOT EXISTS rate_limits (
+  bucket_key TEXT PRIMARY KEY,
+  window_started_at INTEGER NOT NULL,
+  request_count INTEGER NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_access_token ON sessions(access_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token ON sessions(refresh_token);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -127,6 +134,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_a
 CREATE INDEX IF NOT EXISTS idx_codes_status_expiry ON codes(status, redeem_expires_at);
 CREATE INDEX IF NOT EXISTS idx_codes_payment_ref ON codes(payment_ref);
 CREATE INDEX IF NOT EXISTS idx_code_batches_created_at ON code_batches(created_at);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_expires_at ON rate_limits(expires_at);
 
 INSERT INTO app_config (
   id,

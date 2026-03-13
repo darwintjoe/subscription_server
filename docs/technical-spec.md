@@ -1,213 +1,338 @@
 # Subscription Server v1 Technical Specification
 
-## 1) Scope and Goals
+## 1. Scope
 
-This document defines v1 architecture, data model, and API contract for a standalone **Subscription Server** with:
+This document defines the current target architecture for `subscription_server`.
 
-- Google OAuth authentication.
-- Role-based access: **Admin** and **Reseller**.
-- Localized country pricing with fallback.
-- Subscription code generation + activation flows.
-- One-time-use redemption codes.
-- Payment orchestration for QRIS/Card.
-- Cloudflare D1 for code-related persistence only.
-- Google Sheets append-only operational history (yearly file, monthly tab).
-- Basic abuse controls (rate limiting and anti-abuse checks).
+The system has 3 user types:
 
-Out of scope for this version:
+- `admin`
+- `reseller`
+- generic `client app` user with no stored account
 
-- Final payment provider routing policy by country (Xendit vs Stripe precedence).
-- Production IaC specifics.
+The system has 3 app surfaces:
 
-## 2) High-Level Architecture
+- admin mobile web app
+- reseller PWA mobile web app
+- client app integration against backend endpoints only
 
-### Components
+## 2. Locked Architecture
 
-1. **Frontend PWA**
-   - Single app with role-aware UI.
-   - Reseller workflows: price quote → payment intent → code issue.
-   - Admin workflows: pricing/policy management, reseller oversight, reporting, printed-card batches.
+### Main backend server
 
-2. **Subscription API (Cloudflare Worker)**
-   - REST API + webhook endpoints.
-   - JWT session management after Google OAuth.
-   - Code issuance, reservation, redemption.
-   - Payment intent lifecycle and webhook reconciliation.
+The main backend is a writable server process implemented in [`backend/server.mjs`](C:\workspace\subscription_server\backend\server.mjs).
 
-3. **Cloudflare D1 (SQLite-compatible)**
-   - Source of truth for code issuance, redemption, and bulk code batches.
-   - User identity, roles, pricing, country mapping, payment state, and operational controls stay in the backend layer.
+Responsibilities:
 
-4. **Google Sheets Append Service**
-   - Async worker task that appends immutable transaction history rows.
-   - Naming pattern: `subscription-history-YYYY` spreadsheet, tabs `01`..`12`.
+- Google OAuth for admin and reseller
+- JSON-backed user storage
+- JSON-backed pricing / discount / promotion config
+- local backup queue management
+- admin and reseller API surface
+- client app integration endpoints
+- direct Cloudflare D1 access for code storage
 
-5. **Payment Providers**
-   - Unified abstraction layer (`/payments/intents`).
-   - Methods in v1: QRIS, Card.
+### Cloudflare D1
 
-## 3) Authentication and Authorization
+Cloudflare D1 is kept for code-related records only.
 
-## Google OAuth
+D1 stores:
 
-- Use Google OpenID Connect.
-- Store Google subject (`sub`) as immutable external identity key in the backend identity layer.
-- On first successful sign-in:
-  - Create or update backend-managed user state.
-  - Default role assignment = `reseller`.
-- Admin role is assigned only by existing admin (or initial seed script).
+- code issuance records
+- code redemption records
+- bulk gift-card batch records
+- minimal external payment reference
+- code source marker
+- generated timestamp
+- redeemed timestamp
 
-## Session model
+D1 is the live source of truth for code validity and one-time-use enforcement.
 
-- Server-issued JWT (short-lived access token + refresh token pair).
-- Refresh token rotation is handled in the backend layer.
+### Local JSON on backend server
 
-## RBAC
+The backend server stores small writable datasets as JSON files:
 
-- `admin` permissions:
-  - Manage pricing tables and fallback prices.
-  - Manage user roles.
-  - View all transactions/reconciliations.
-  - Create bulk code batches.
-- `reseller` permissions:
-  - Read effective pricing for own location.
-  - Create payment intents and issue codes for permitted products.
-  - Redeem / activate only via scoped flows.
+- [`data/users.json`](C:\workspace\subscription_server\data\users.json)
+- [`data/config.json`](C:\workspace\subscription_server\data\config.json)
+- [`data/backup-queue.json`](C:\workspace\subscription_server\data\backup-queue.json)
+- [`data/last-sent-batch.json`](C:\workspace\subscription_server\data\last-sent-batch.json)
 
-## 4) Pricing and Location
+Rules:
 
-## Country detection
+- `users.json` is separate
+- pricing, discounts, promotions, payment config, and backup metadata are in one combined config file
+- only one backup copy is kept when writing JSON
+- no historical config retention is required
+- one active config plus at most one upcoming config is allowed
 
-- Determine country from device/network geolocation in request context.
-- If country unknown/unlisted => fallback `USD 99 / year`.
+### Google Sheets
 
-## Pricing structure
+Google Sheets is the long-term business ledger.
 
-- Pricing is stored in Cloudflare Worker static config (local configuration), not in D1.
-- Supported durations in v1: `6_months`, `12_months`.
-- Route 1 (Direct Subscribe) and Route 2 (Reseller) both allow `6_months` and `12_months` selection.
-- Editable default prices in config:
+Rules:
 
-### 12 months
-- ID: 999,000 IDR
-- VN: 999,000 VND
-- TH: 1,999 THB
-- MY: 299 MYR
-- MM: 49,000 MMK
-- Fallback: 99 USD
+- regular business rows are queued locally and sent in one daily batch
+- daily batch time is `3:00 AM UTC+7`
+- admin can also trigger manual backup
+- only unsent rows are sent
+- after success, queue rows are cleared
+- the most recent sent batch is kept locally in `last-sent-batch.json`
 
-### 6 months
-- ID: 699,000 IDR
-- VN: 699,000 VND
-- TH: 1,499 THB
-- MY: 199 MYR
-- MM: 29,000 MMK
-- Fallback: 69 USD
+Split:
 
-## Quoting rule
+- regular transactions go to the normal transaction sheet
+- bulk gift-card issuance goes to a separate Google Sheet file
 
-- Resolve `country_code` from request context.
-- Lookup `(country_code, duration_code)` in Worker config.
-- If no country price exists, use fallback price for that duration from Worker config.
+## 3. Authentication and User Model
 
-## 5) Subscription Code Flows
+### OAuth
 
-## A) Direct Subscribe from Sell More app
+Admin and reseller users authenticate with Google OAuth only.
 
-- User selects 6 or 12 months from the app payment flow.
-- Code is generated and immediately redeemed in one transaction.
-- No pre-redeem expiry applied.
-- Atomic flow:
-  1. Payment confirmed.
-  2. Code generated with `status=reserved`.
-  3. Code redeemed immediately (`status=redeemed`, `redeemed_at=now`).
+Stored user fields:
 
-## B) Reseller-generated code (not immediately redeemed)
+- `name`
+- `email`
+- `country`
+- `role`
+- `status`
 
-- Code generated after successful payment.
-- Must include **30-day redemption expiry**.
-- On redemption attempt past expiry => reject with `CODE_EXPIRED`.
+Country is:
 
-## C) Bulk pre-generated printed cards
+- silently detected from request headers
+- updated automatically on later login if it changes
+- visible to admin
+- not shown to reseller as a UI feature
 
-- Batch generation with fixed **12-month redemption expiry** from issuance.
-- Each card still one-time redeemable.
-- Batch metadata tracks issuer, quantity, and distribution notes.
+### Role assignment
 
-## One-time-use enforcement
+- first successful login becomes bootstrap `admin`
+- every later new user becomes `reseller`
+- existing admin can promote or demote other users
+- admin can activate or deactivate other users
+- admin cannot deactivate or demote themself
 
-- `codes.status` transition allowed once from `issued|reserved` -> `redeemed`.
-- Enforced via conditional update in single SQL statement.
+User record key:
 
-## 6) Payments
+- email address
 
-## Intent lifecycle
+## 4. Pricing, Discounts, and Promotions
 
-States: `created -> pending -> paid | failed | expired | canceled`
+### Country detection
 
-- Client requests intent with amount/currency/method.
-- Server creates provider intent and stores canonical record.
-- Provider webhook updates final status.
-- Code issuance requires `paid` state + idempotency key.
+Pricing uses request-header country only.
 
-## Methods in v1
+Rules:
 
-- `qris`
-- `card`
+- no browser geolocation
+- no manual country override
+- fallback to USD for non-target countries
 
-Provider selection algorithm is pluggable and country-aware.
+### Durations
 
-## 7) Abuse Protection (v1)
+- client app direct subscribe: `12_months` only
+- reseller flow: `6_months` and `12_months`
+- gift card batch generation: `6_months` and `12_months`
 
-1. **IP + user rate limiting**
-   - Token bucket per route group (`auth`, `quote`, `payment`, `redeem`).
-2. **Idempotency keys**
-   - Required for create-payment-intent and issue-code endpoints.
-3. **Replay prevention**
-   - Nonce/timestamp validation for sensitive callbacks.
-4. **Webhook signature verification**
-   - Per provider secret.
-5. **Suspicion flags**
-   - Repeated failures trigger soft lock and admin review.
+### Reseller discount
 
-## 8) Google Sheets Append History
+- per-country
+- fixed amount or percentage
+- applied immediately to reseller checkout price
 
-## Record strategy
+### Promotions
 
-- Append-only rows; no updates/deletes.
-- Write after transactional commit via async job queue.
-- Retry with backoff; deduplicate by `event_id`.
+- can target:
+  - app only
+  - reseller only
+  - both
+- can target one or many countries
+- multi-country promotions must be percentage-based
+- multiple promotions may exist at the same time
+- overlapping promotions for the same country and target are invalid
+- if both reseller discount and promotion qualify, choose the lower final price
+- only one final adjustment applies
 
-## Destination
+## 5. Subscription Flows
 
-- Spreadsheet: `subscription-history-<YYYY>`
-- Sheet/tab: `<MM>` (e.g., `03`)
+### A. Client app direct subscribe
 
-## Minimum columns
+Flow:
 
-- `event_id`, `event_time_utc`, `order_id`, `payment_intent_id`, `code_id`, `flow_type`,
-  `actor_user_id`, `actor_role`, `country`, `currency`, `amount_minor`, `status`,
-  `provider`, `provider_ref`, `notes`.
+1. client app requests 12-month quote
+2. app completes payment outside the subscription module
+3. backend receives `external_payment_id`
+4. backend creates a D1 code record
+5. backend redeems that code immediately
+6. backend returns signed subscription token
 
-## 9) Concurrency and Data Integrity (D1)
+UI expectations in the client app:
 
-- Use explicit transactions for code state transitions.
-- Unique constraints for business-critical invariants:
-  - Unique code value.
-  - Single redemption event per code.
-- Optimistic checks via `updated_at`/state conditions.
+- no OAuth
+- show direct subscribe buttons for:
+  - QR payment
+  - card payment
+- show only `Subscribed until <date>`
+- show generic payment failure message
+- after success, refresh subscription status immediately
 
-## 10) Operational bootstrap
+### B. Reseller purchase flow
 
-- Admin seed via one-time CLI/Worker secret:
-  - `ADMIN_SEED_EMAILS` environment variable.
-  - On login, if email in seed list and no admins exist, assign `admin`.
-- Disable seed path after first admin assignment.
+Flow:
 
-## 11) API summary
+1. reseller logs in with Google
+2. reseller sees local price from request-header country
+3. reseller selects duration
+4. reseller completes payment
+5. backend issues code in D1
+6. reseller copies or shares code manually
+7. end user redeems code in the client app
 
-Detailed endpoints and schemas are defined in `api/openapi.yaml`.
+Reseller device behavior:
 
-## 12) Schema summary
+- keep last 10 issued codes locally on device only
+- no central reseller history restore
 
-DDL and indexes are defined in `db/schema.sql`.
+### C. Gift card / prepaid card flow
+
+Flow:
+
+1. admin creates bulk code batch
+2. codes are written to D1
+3. bulk issuance row is queued and should be appended to the separate gift-card Google Sheet
+4. end user redeems code through the same client app code input
+
+Rules:
+
+- admin only
+- same short code format as reseller codes
+- same redeem function as reseller codes
+- admin can attach a simple batch note/label
+
+## 6. Code Design
+
+Code format:
+
+- short human-readable style like `SM-12M-ABCD-EFGH`
+
+Code source markers:
+
+- `direct`
+- `reseller`
+- `gift_card`
+
+Status behavior:
+
+- code rows remain in D1
+- redeemed or expired codes are not deleted, because they are needed to reject reuse
+- one code row is updated over time instead of maintaining a large internal history model
+
+## 7. Subscription Token
+
+Client app uses a signed local token as proof of entitlement.
+
+Rules:
+
+- backend returns signed subscription token
+- token includes expiry and version marker
+- client app stores token locally
+- client app backup/restore system is responsible for preserving it
+- no backend token validation/refresh endpoint is required for now
+- replacement device restore is allowed
+- old device does not need to be invalidated
+
+## 8. Admin Dashboard
+
+Main cards:
+
+1. `Subscriptions Sold`
+2. `Revenue Total`
+3. `Pending Backup Today`
+4. `Active Resellers`
+
+Rules:
+
+- dashboard reads long-term reporting from Google Sheets summaries
+- dashboard may also show live `pending today` from local queue
+- admin can see user country
+- admin UI exposes:
+  - user management
+  - pricing config
+  - backup status
+  - backup trigger button
+
+## 9. Backup Model
+
+### Regular transaction rows
+
+Regular business rows are queued and sent in the daily batch.
+
+Use final meaningful rows only.
+
+Examples:
+
+- reseller payment succeeded + code issued
+- direct subscribe succeeded
+- code redeemed
+
+### Bulk gift-card rows
+
+Bulk gift-card issuance belongs to a separate Google Sheets file.
+
+The current backend keeps a local queue and manual backup path for this, with the same unsent-row rule.
+
+### Admin backup controls
+
+Admin UI should show:
+
+- `Last backup at ...`
+- `Backup Now`
+
+If scheduled backup fails:
+
+- wait until the next day
+- admin may trigger manual backup
+
+## 10. API Surface
+
+### Admin / reseller server endpoints
+
+Implemented in [`backend/server.mjs`](C:\workspace\subscription_server\backend\server.mjs):
+
+- `/v1/auth/google/start`
+- `/v1/auth/google/callback`
+- `/v1/auth/refresh`
+- `/v1/me`
+- `/v1/pricing/quote`
+- `/v1/codes/issue`
+- `/v1/codes/redeem`
+- `/v1/admin/config`
+- `/v1/admin/users`
+- `/v1/admin/users/{userId}`
+- `/v1/admin/reports/summary`
+- `/v1/admin/codes`
+- `/v1/admin/code-batches`
+- `/v1/admin/backup`
+
+### Client app integration endpoints
+
+Documented for the separate app team in [`docs/client-app-integration.md`](C:\workspace\subscription_server\docs\client-app-integration.md):
+
+- `POST /v1/client/subscription/quote`
+- `POST /v1/client/subscription/direct`
+- `POST /v1/client/subscription/redeem`
+
+## 11. Current Non-Goals
+
+These are not fully implemented yet:
+
+- real payment provider integration
+- live Google Sheets API read/write integration
+- production deployment of the new Node backend
+- client app UI inside this repository
+
+## 12. Legacy Note
+
+[`backend/worker.mjs`](C:\workspace\subscription_server\backend\worker.mjs) is legacy from the earlier Worker-first architecture.
+
+It is no longer the target system design.

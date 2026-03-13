@@ -401,6 +401,15 @@
           </div>
         </div>
         <p class="tiny" id="testMeta"></p>
+        <div class="stack">
+          <div class="headerRow">
+            <div>
+              <p class="eyebrow">Recent Codes</p>
+              <h3>Last 10 on this device</h3>
+            </div>
+          </div>
+          <div class="stack" id="historyList"></div>
+        </div>
       </section>
     </div>
   </main>
@@ -408,17 +417,18 @@
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/reseller/sw.js");
 
-    const API_BASE = "https://subscription-live.applocator.workers.dev";
+    const API_BASE = localStorage.getItem("subscription_api_base") || "http://127.0.0.1:3000";
     const storage = {
       access: "admin_access_token",
       refresh: "admin_refresh_token",
       remember: "admin_remember_me",
+      history: "reseller_code_history",
     };
     const state = {
       quote: null,
       intent: null,
       lastCode: "",
-      countrySource: "server / fallback",
+      countrySource: "request header",
     };
 
     const $ = (id) => document.getElementById(id);
@@ -426,7 +436,7 @@
     $("loginBtn").onclick = login;
     $("sessionBtn").onclick = checkSession;
     $("logoutBtn").onclick = logout;
-    $("detectBtn").onclick = detectCountry;
+    $("detectBtn").onclick = loadQuote;
     $("duration").onchange = loadQuote;
     $("createPaymentBtn").onclick = createPayment;
     $("completePaymentBtn").onclick = completePayment;
@@ -439,10 +449,10 @@
 
     hydrateRememberPreference();
     consumeOauthResult();
+    renderHistory();
     bootstrap();
 
     async function bootstrap() {
-      await detectCountry();
       await loadQuote();
     }
 
@@ -509,40 +519,20 @@
       setStatus("Google sign-in completed.", "ok");
     }
 
-    async function detectCountry() {
-      try {
-        if (!navigator.geolocation) throw new Error("Geolocation is not supported on this device.");
-        const position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 8000 });
-        });
-        const geo = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`);
-        const data = await geo.json();
-        const country = String((data.address && data.address.country_code) || "").toUpperCase();
-        if (!country) throw new Error("Could not map your device location to a country.");
-        $("country").value = country;
-        state.countrySource = "device location";
-        $("countrySource").textContent = state.countrySource;
-        $("countrySummary").textContent = country;
-        setStatus(`Country detected as ${country}.`, "ok");
-      } catch (error) {
-        state.countrySource = "server / fallback";
-        $("countrySource").textContent = state.countrySource;
-        setStatus("Using server / fallback country detection.", "error");
-      }
-    }
-
     async function loadQuote() {
       try {
         const quote = await api("/v1/pricing/quote", "POST", {
           duration_code: $("duration").value,
-          ...( $("country").value.trim() ? { country_code: $("country").value.trim() } : {} ),
         });
         state.quote = quote;
-        $("countrySummary").textContent = quote.country_code || $("country").value.trim() || "-";
+        $("country").value = quote.country_code || "";
+        $("country").readOnly = true;
+        $("countrySummary").textContent = quote.country_code || "USD fallback";
         $("periodSummary").textContent = $("duration").value === "12_months" ? "12M" : "6M";
         $("priceLabel").textContent = quote.used_fallback ? "Fallback pricing" : "Localized pricing";
         $("priceValue").textContent = `${quote.currency} ${formatMinor(quote.amount_minor)}`;
         $("priceMeta").textContent = `${$("duration").value === "12_months" ? "12 months" : "6 months"} for ${quote.country_code || "fallback region"}.`;
+        $("countrySource").textContent = state.countrySource;
         setStatus("Live price loaded.", "ok");
       } catch (error) {
         setStatus("Unable to load quote: " + error.message, "error");
@@ -552,15 +542,12 @@
     async function createPayment() {
       try {
         if (!state.quote) await loadQuote();
-        const payment = await api("/v1/payments/intents", "POST", {
+        state.intent = {
+          external_payment_id: `reseller-${Date.now()}`,
           payment_method: $("paymentMethod").value,
-          flow_type: "reseller_code",
           duration_code: $("duration").value,
-          country_code: $("country").value.trim() || undefined,
-          channel: "reseller",
-        });
-        state.intent = payment;
-        setStatus(`${$("paymentMethod").value.toUpperCase()} payment created. Continue when the payment is confirmed.`, "ok");
+        };
+        setStatus(`${$("paymentMethod").value.toUpperCase()} payment prepared. Complete after payment is confirmed.`, "ok");
       } catch (error) {
         setStatus("Payment creation failed: " + error.message, "error");
       }
@@ -569,13 +556,16 @@
     async function completePayment() {
       try {
         if (!state.intent) throw new Error("Create a payment first.");
-        await api("/v1/webhooks/payments/mock", "POST", { payment_intent_id: state.intent.id });
         const issued = await api("/v1/codes/issue", "POST", {
-          payment_intent_id: state.intent.id,
-          flow_type: "reseller_code",
           duration_code: $("duration").value,
+          source: "reseller",
+          external_payment_id: state.intent.external_payment_id,
+          payment_method: state.intent.payment_method,
+          currency: state.quote.currency,
+          amount_minor: state.quote.amount_minor,
         });
         applyCode(issued.code_value, issued.duration_code || $("duration").value);
+        rememberCode(issued.code_value, issued.duration_code || $("duration").value);
         setStatus("Payment completed and code issued.", "ok");
       } catch (error) {
         setStatus("Payment completion failed: " + error.message, "error");
@@ -583,20 +573,49 @@
     }
 
     async function generateTestCode() {
-      try {
-        const issued = await api("/v1/test/codes/issue", "POST", { keyword: $("testKeyword").value.trim() });
-        applyCode(issued.code_value, issued.duration_code);
-        $("testMeta").textContent = `Test code expires at ${issued.redeem_expires_at}.`;
-        setStatus("1-day test code issued.", "ok");
-      } catch (error) {
-        setStatus("Test code failed: " + error.message, "error");
-      }
+      setStatus("Test code flow is disabled on the new server.", "error");
     }
 
     function applyCode(codeValue, durationCode) {
       state.lastCode = codeValue;
       $("codeValue").textContent = codeValue;
       $("codeBadge").textContent = durationCode === "1_day" ? "1-day test code" : "Code ready";
+    }
+
+    function renderHistory() {
+      const history = getCodeHistory();
+      $("historyList").innerHTML = history.length
+        ? history.map((item) => `
+          <div class="miniCard">
+            <div class="headerRow">
+              <strong>${item.code_value}</strong>
+              <span class="pill">${item.duration_code === "12_months" ? "12M" : "6M"}</span>
+            </div>
+            <p class="tiny">${new Date(item.saved_at).toLocaleString()}</p>
+          </div>
+        `).join("")
+        : `<div class="miniCard"><p>No local code history yet.</p></div>`;
+    }
+
+    function rememberCode(codeValue, durationCode) {
+      const next = getCodeHistory().filter((item) => item.code_value !== codeValue);
+      next.unshift({
+        code_value: codeValue,
+        duration_code: durationCode,
+        saved_at: new Date().toISOString(),
+      });
+      localStorage.setItem(storage.history, JSON.stringify(next.slice(0, 10)));
+      renderHistory();
+    }
+
+    function getCodeHistory() {
+      try {
+        const raw = localStorage.getItem(storage.history) || "[]";
+        const list = JSON.parse(raw);
+        return Array.isArray(list) ? list : [];
+      } catch (error) {
+        return [];
+      }
     }
 
     async function copyCode() {

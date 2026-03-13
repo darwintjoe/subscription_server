@@ -1,0 +1,8 @@
+{
+  "name": "subscription-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:server": "node backend/server.mjs"
+  }
+}

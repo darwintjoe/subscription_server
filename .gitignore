@@ -5,3 +5,5 @@
 wrangler-uat.log
 tail-log.json
 id.txt
+data/*.backup.json
+data/*.tmp

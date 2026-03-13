@@ -3,8 +3,8 @@ info:
   title: Subscription Server API
   version: 1.0.0
   description: >-
-    API contract for standalone Subscription Server with Google OAuth, Admin/Reseller RBAC,
-    localized pricing, single-use codes, payment intents, and sheet append history hooks.
+    API contract for the current main backend server. Admin and reseller users use Google OAuth,
+    users/config live in local JSON on the backend server, and code issuance/redemption records live in Cloudflare D1.
 servers:
   - url: https://subscription.example.com
 security:
@@ -13,10 +13,9 @@ security:
 tags:
   - name: Auth
   - name: Pricing
-  - name: Payments
+  - name: Client
   - name: Codes
   - name: Admin
-  - name: Webhooks
 
 paths:
   /v1/auth/google/callback:
@@ -89,60 +88,92 @@ paths:
               schema:
                 $ref: '#/components/schemas/QuoteResponse'
 
-  /v1/payments/intents:
+  /v1/client/subscription/quote:
     post:
-      tags: [Payments]
-      summary: Create payment intent for selected flow and duration
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreatePaymentIntentRequest'
-      responses:
-        '201':
-          description: Payment intent created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentIntentResponse'
-
-  /v1/payments/intents/{id}:
-    get:
-      tags: [Payments]
-      summary: Get payment intent status
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+      tags: [Client]
+      summary: Return 12-month direct-subscribe quote for the client app
+      security: []
       responses:
         '200':
-          description: Payment intent
+          description: Direct subscribe quote
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentIntentResponse'
+                $ref: '#/components/schemas/QuoteResponse'
 
-  /v1/codes/issue:
+  /v1/client/subscription/direct:
     post:
-      tags: [Codes]
-      summary: Issue code after successful payment
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+      tags: [Client]
+      summary: Complete direct subscribe after payment success
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [payment_intent_id]
+              required: [external_payment_id]
               properties:
-                payment_intent_id:
+                external_payment_id:
                   type: string
+                payment_method:
+                  type: string
+                  enum: [qris, card]
+                currency:
+                  type: string
+                amount_minor:
+                  type: integer
+      responses:
+        '201':
+          description: Direct subscribe completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectSubscribeResponse'
+
+  /v1/client/subscription/redeem:
+    post:
+      tags: [Client]
+      summary: Redeem reseller or gift-card code from the client app
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code_value]
+              properties:
+                code_value:
+                  type: string
+      responses:
+        '200':
+          description: Code redeemed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedeemCodeResponse'
+
+  /v1/codes/issue:
+    post:
+      tags: [Codes]
+      summary: Issue code after successful payment reference confirmation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [external_payment_id, duration_code]
+              properties:
+                external_payment_id:
+                  type: string
+                duration_code:
+                  type: string
+                  enum: [6_months, 12_months]
+                source:
+                  type: string
+                  enum: [direct, reseller, gift_card]
       responses:
         '201':
           description: Code issued/redeemed depending on flow type
@@ -175,10 +206,10 @@ paths:
         '409':
           description: Invalid state (already redeemed/expired)
 
-  /v1/admin/users/{userId}/roles:
+  /v1/admin/users/{userId}:
     put:
       tags: [Admin]
-      summary: Set roles for a user (admin only)
+      summary: Update role/status for a user (admin only)
       parameters:
         - name: userId
           in: path
@@ -191,16 +222,16 @@ paths:
           application/json:
             schema:
               type: object
-              required: [roles]
               properties:
-                roles:
-                  type: array
-                  items:
-                    type: string
-                    enum: [admin, reseller]
+                role:
+                  type: string
+                  enum: [admin, reseller]
+                status:
+                  type: string
+                  enum: [active, inactive]
       responses:
         '200':
-          description: Roles updated
+          description: User updated
 
   /v1/admin/code-batches:
     post:
@@ -230,20 +261,13 @@ paths:
         '201':
           description: Batch created
 
-  /v1/webhooks/payments/{provider}:
+  /v1/admin/backup:
     post:
-      tags: [Webhooks]
-      summary: Payment provider webhook receiver
-      security: []
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
+      tags: [Admin]
+      summary: Manually flush queued local rows into the backup batch archive
       responses:
-        '202':
-          description: Accepted
+        '200':
+          description: Backup completed or queue empty
 
 components:
   securitySchemes:
@@ -251,14 +275,6 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
-  parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
 
   schemas:
     AuthSessionResponse:
@@ -308,6 +324,28 @@ components:
           type: string
         amount_minor:
           type: integer
+        audience:
+          type: string
+        adjustment:
+          nullable: true
+
+    DirectSubscribeResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        subscription_token:
+          type: string
+        subscribed_until:
+          type: string
+          format: date-time
+        code_value:
+          type: string
+        duration_code:
+          type: string
+        redeemed_at:
+          type: string
+          format: date-time
 
     CreatePaymentIntentRequest:
       type: object

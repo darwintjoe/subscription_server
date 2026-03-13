@@ -296,10 +296,12 @@
           <button class="secondary chip" data-jump="users">User Management</button>
           <button class="secondary chip" data-jump="pricing">Pricing</button>
           <button class="secondary chip" data-jump="payments">Payment Received</button>
+          <button class="ghost chip" id="backupBtn">Backup Now</button>
         </div>
       </div>
 
       <div class="summaryGrid" id="summaryGrid"></div>
+      <p class="muted" id="backupMeta">Last backup at -</p>
       <div class="status" id="status">Sign in to load live admin data.</div>
     </section>
 
@@ -360,7 +362,7 @@
   </main>
 
   <script>
-    const API_BASE = "https://subscription-live.applocator.workers.dev";
+    const API_BASE = localStorage.getItem("subscription_api_base") || "http://127.0.0.1:3000";
     const storage = {
       access: "admin_access_token",
       refresh: "admin_refresh_token",
@@ -379,13 +381,14 @@
     const state = {
       config: null,
       users: [],
-      orders: [],
       codes: [],
+      summary: null,
       sort: { key: "created_at", direction: "desc" },
     };
 
     const el = {
       summaryGrid: document.getElementById("summaryGrid"),
+      backupMeta: document.getElementById("backupMeta"),
       status: document.getElementById("status"),
       codesTable: document.getElementById("codesTable"),
       paymentList: document.getElementById("paymentList"),
@@ -398,6 +401,7 @@
     document.getElementById("refreshSessionBtn").onclick = refreshSession;
     document.getElementById("logoutBtn").onclick = logout;
     document.getElementById("savePricingBtn").onclick = savePricing;
+    document.getElementById("backupBtn").onclick = runBackup;
 
     document.querySelectorAll("[data-jump]").forEach((button) => {
       button.onclick = () => {
@@ -496,15 +500,15 @@
 
     async function loadAll() {
       try {
-        const [configData, usersData, ordersData, codesData] = await Promise.all([
+        const [configData, usersData, summaryData, codesData] = await Promise.all([
           api("/v1/admin/config"),
           api("/v1/admin/users"),
-          api("/v1/admin/orders"),
+          api("/v1/admin/reports/summary"),
           api("/v1/admin/codes"),
         ]);
         state.config = configData.config;
         state.users = usersData.users || [];
-        state.orders = ordersData.orders || [];
+        state.summary = summaryData.cards || {};
         state.codes = codesData.codes || [];
         renderSummary();
         renderCodes();
@@ -518,26 +522,13 @@
     }
 
     function renderSummary() {
-      const now = new Date();
-      const sameMonth = (value) => {
-        if (!value) return false;
-        const date = new Date(value);
-        return date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() === now.getUTCMonth();
-      };
-
-      const generatedTotal = state.codes.length;
-      const generatedMonth = state.codes.filter((item) => sameMonth(item.created_at)).length;
-      const redeemedTotal = state.codes.filter((item) => item.status === "redeemed").length;
-      const redeemedMonth = state.codes.filter((item) => sameMonth(item.redeemed_at)).length;
-      const paidThisMonth = state.orders
-        .filter((item) => item.status === "paid" && sameMonth(item.paid_at || item.created_at))
-        .reduce((sum, item) => sum + Number(item.amount_minor || 0), 0);
-
       el.summaryGrid.innerHTML = [
-        summaryCard("Code Generated", generatedMonth, `of ${generatedTotal} total`),
-        summaryCard("Code Redeemed", redeemedMonth, `of ${redeemedTotal} total`),
-        summaryCard("Payment Received", formatMinor(paidThisMonth), "this month"),
+        summaryCard("Subscriptions Sold", state.summary?.subscriptions_sold ?? "-", "Google Sheets summary"),
+        summaryCard("Revenue Total", state.summary?.revenue_total ?? "-", "top currency by volume"),
+        summaryCard("Pending Backup Today", state.summary?.pending_backup_today ?? 0, "local unsent queue"),
+        summaryCard("Active Resellers", state.summary?.active_resellers ?? 0, "active reseller users"),
       ].join("");
+      el.backupMeta.textContent = `Last backup at ${formatDate(state.config?.backup?.last_backup_at)}`;
     }
 
     function summaryCard(label, value, detail) {
@@ -549,8 +540,8 @@
       el.codesTable.innerHTML = rows.map((row) => `
         <tr>
           <td><strong>${escapeHtml(shortCode(row.code_value || row.id || "-"))}</strong><div class="muted">${escapeHtml(row.status || "-")}</div></td>
-          <td>${escapeHtml(creatorLabel(row))}</td>
-          <td>${escapeHtml((row.country_code || "-").toUpperCase())}</td>
+          <td>${escapeHtml(row.source || creatorLabel(row))}</td>
+          <td>${escapeHtml((row.country_code || row.source || "-").toUpperCase())}</td>
           <td>${escapeHtml(formatDate(row.created_at))}</td>
           <td>${escapeHtml(formatDate(row.redeemed_at))}</td>
         </tr>
@@ -569,8 +560,8 @@
 
     function sortableValue(row, key) {
       if (key === "code") return String(row.code_value || row.id || "");
-      if (key === "created_by") return creatorLabel(row).toLowerCase();
-      if (key === "country") return String(row.country_code || "");
+      if (key === "created_by") return String(row.source || creatorLabel(row)).toLowerCase();
+      if (key === "country") return String(row.country_code || row.source || "");
       if (key === "redeemed_at") return String(row.redeemed_at || "");
       return String(row.created_at || "");
     }
@@ -597,22 +588,9 @@
     }
 
     function renderPayments() {
-      const now = new Date();
-      const sameMonth = (value) => {
-        if (!value) return false;
-        const date = new Date(value);
-        return date.getUTCFullYear() === now.getUTCFullYear() && date.getUTCMonth() === now.getUTCMonth();
-      };
-      const totals = { qris: 0, card: 0 };
-      state.orders
-        .filter((item) => item.status === "paid" && sameMonth(item.paid_at || item.created_at))
-        .forEach((item) => {
-          const key = item.payment_method === "card" ? "card" : "qris";
-          totals[key] += Number(item.amount_minor || 0);
-        });
       el.paymentList.innerHTML = [
-        paymentCard("QRIS", totals.qris),
-        paymentCard("Card", totals.card),
+        paymentCard("Revenue Summary", state.summary?.revenue_total ?? "-"),
+        paymentCard("Pending Backup", state.summary?.pending_backup_today ?? 0),
       ].join("");
     }
 
@@ -627,19 +605,26 @@
             <div>
               <h3>${escapeHtml(user.display_name || user.email)}</h3>
               <p>${escapeHtml(user.email || "")}</p>
+              <p>${escapeHtml((user.country || "-").toUpperCase())}</p>
             </div>
-            <span class="pill">${escapeHtml((user.roles || []).join(", "))}</span>
+            <span class="pill">${escapeHtml(user.role || (user.roles || []).join(", "))}</span>
           </div>
           <div class="grid2" style="margin-top:12px;">
             <label>Role
               <select data-user-role="${user.id}">
-                <option value="reseller" ${user.roles.includes("reseller") && !user.roles.includes("admin") ? "selected" : ""}>reseller</option>
-                <option value="admin,reseller" ${user.roles.includes("admin") ? "selected" : ""}>admin + reseller</option>
+                <option value="reseller" ${user.role === "reseller" ? "selected" : ""}>reseller</option>
+                <option value="admin" ${user.role === "admin" ? "selected" : ""}>admin</option>
               </select>
             </label>
-            <div class="buttonRow" style="align-items:end;">
-              <button class="secondary" data-save-user="${user.id}">Save</button>
-            </div>
+            <label>Status
+              <select data-user-status="${user.id}">
+                <option value="active" ${user.status === "active" ? "selected" : ""}>active</option>
+                <option value="inactive" ${user.status === "inactive" ? "selected" : ""}>inactive</option>
+              </select>
+            </label>
+          </div>
+          <div class="buttonRow" style="align-items:end; margin-top:12px;">
+            <button class="secondary" data-save-user="${user.id}">Save</button>
           </div>
         </div>
       `).join("");
@@ -647,13 +632,17 @@
       document.querySelectorAll("[data-save-user]").forEach((button) => {
         button.onclick = async () => {
           const userId = button.getAttribute("data-save-user");
-          const select = document.querySelector(`[data-user-role="${userId}"]`);
+          const roleSelect = document.querySelector(`[data-user-role="${userId}"]`);
+          const statusSelect = document.querySelector(`[data-user-status="${userId}"]`);
           try {
-            await api(`/v1/admin/users/${userId}/roles`, "PUT", { roles: select.value.split(",") });
-            setStatus("User role updated.", "ok");
+            await api(`/v1/admin/users/${encodeURIComponent(userId)}`, "PUT", {
+              role: roleSelect.value,
+              status: statusSelect.value,
+            });
+            setStatus("User updated.", "ok");
             await loadAll();
           } catch (error) {
-            setStatus("Role update failed: " + error.message, "error");
+            setStatus("User update failed: " + error.message, "error");
           }
         };
       });
@@ -661,8 +650,9 @@
 
     function renderPricing() {
       if (!state.config) return;
+      const pricingState = state.config.active || state.config;
       el.pricingMarkets.innerHTML = DEFAULT_MARKETS.map((market) => {
-        const pricing = state.config.pricing[market.code] || state.config.pricing.fallback;
+        const pricing = pricingState.pricing[market.code] || pricingState.pricing.fallback;
         return `
           <div class="miniCard stack">
             <div>
@@ -687,7 +677,8 @@
     async function savePricing() {
       try {
         if (!state.config) throw new Error("No config loaded.");
-        const pricing = JSON.parse(JSON.stringify(state.config.pricing));
+        const nextActive = JSON.parse(JSON.stringify(state.config.active || state.config));
+        const pricing = nextActive.pricing;
         document.querySelectorAll("[data-market]").forEach((input) => {
           const market = input.dataset.market;
           const duration = input.dataset.duration;
@@ -699,14 +690,11 @@
         });
 
         const payload = {
-          pricing,
-          payment_methods: state.config.payment_methods,
-          google_oauth_mode: state.config.google_oauth_mode,
-          onboarding_rule: state.config.onboarding_rule,
-          sheet_backup_enabled: state.config.sheet_backup_enabled,
-          sheet_script_url: state.config.sheet_script_url || "",
-          sheet_spreadsheet_prefix: state.config.sheet_spreadsheet_prefix || "Subscription",
-          sheet_owner_email: state.config.sheet_owner_email || "",
+          active: {
+            ...nextActive,
+            pricing,
+          },
+          backup: state.config.backup,
         };
 
         const data = await api("/v1/admin/config", "PUT", payload);
@@ -715,6 +703,20 @@
         setStatus("Pricing updated.", "ok");
       } catch (error) {
         setStatus("Save pricing failed: " + error.message, "error");
+      }
+    }
+
+    async function runBackup() {
+      try {
+        const data = await api("/v1/admin/backup", "POST");
+        if (data.sent) {
+          setStatus(`Backup completed. Sent ${data.regular_rows} regular and ${data.bulk_rows} bulk rows.`, "ok");
+        } else {
+          setStatus("Backup not needed. Queue is empty.", "ok");
+        }
+        await loadAll();
+      } catch (error) {
+        setStatus("Backup failed: " + error.message, "error");
       }
     }
 

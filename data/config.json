@@ -1,0 +1,78 @@
+{
+  "google_oauth_mode": "google_oauth_only",
+  "onboarding_rule": "first_user_admin",
+  "active": {
+    "payment_methods": {
+      "qris": {
+        "enabled": true,
+        "provider": "xendit"
+      },
+      "card": {
+        "enabled": true,
+        "provider": "stripe"
+      }
+    },
+    "pricing": {
+      "ID": {
+        "6_months": {
+          "currency": "IDR",
+          "amount_minor": 699000
+        },
+        "12_months": {
+          "currency": "IDR",
+          "amount_minor": 999000
+        }
+      },
+      "MY": {
+        "6_months": {
+          "currency": "MYR",
+          "amount_minor": 199
+        },
+        "12_months": {
+          "currency": "MYR",
+          "amount_minor": 299
+        }
+      },
+      "SG": {
+        "6_months": {
+          "currency": "SGD",
+          "amount_minor": 69
+        },
+        "12_months": {
+          "currency": "SGD",
+          "amount_minor": 99
+        }
+      },
+      "TH": {
+        "6_months": {
+          "currency": "THB",
+          "amount_minor": 1499
+        },
+        "12_months": {
+          "currency": "THB",
+          "amount_minor": 1999
+        }
+      },
+      "fallback": {
+        "6_months": {
+          "currency": "USD",
+          "amount_minor": 6900
+        },
+        "12_months": {
+          "currency": "USD",
+          "amount_minor": 9900
+        }
+      }
+    },
+    "reseller_discounts": {},
+    "promotions": []
+  },
+  "upcoming": null,
+  "backup": {
+    "timezone": "UTC+7",
+    "daily_run_time": "03:00",
+    "last_backup_at": "2026-03-13T02:18:56.272Z",
+    "sheet_prefix": "Subscription",
+    "last_sent_batch_at": "2026-03-13T02:18:56.272Z"
+  }
+}
