@@ -357,6 +357,29 @@
         </div>
         <button class="primary" id="savePricingBtn">Save Pricing</button>
       </div>
+      <div class="miniCard stack" style="margin-bottom:14px;">
+        <div>
+          <h3>Google Sheets Backup</h3>
+          <p>Paste the Apps Script Web App URL here, then enable backup.</p>
+        </div>
+        <div class="grid2">
+          <label>Backup enabled
+            <select id="sheetBackupEnabled">
+              <option value="false">disabled</option>
+              <option value="true">enabled</option>
+            </select>
+          </label>
+          <label>Sheet owner email
+            <input id="sheetOwnerEmail" type="email" placeholder="owner@example.com">
+          </label>
+        </div>
+        <label>Apps Script webhook URL
+          <input id="sheetScriptUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+        </label>
+        <label>Spreadsheet prefix
+          <input id="sheetPrefix" placeholder="Subscription">
+        </label>
+      </div>
       <div class="grid2" id="pricingMarkets"></div>
     </section>
   </main>
@@ -394,6 +417,10 @@
       paymentList: document.getElementById("paymentList"),
       usersList: document.getElementById("usersList"),
       pricingMarkets: document.getElementById("pricingMarkets"),
+      sheetBackupEnabled: document.getElementById("sheetBackupEnabled"),
+      sheetOwnerEmail: document.getElementById("sheetOwnerEmail"),
+      sheetScriptUrl: document.getElementById("sheetScriptUrl"),
+      sheetPrefix: document.getElementById("sheetPrefix"),
     };
 
     document.getElementById("loginBtn").onclick = login;
@@ -651,6 +678,10 @@
     function renderPricing() {
       if (!state.config) return;
       const pricingState = state.config.active || state.config;
+      el.sheetBackupEnabled.value = String(Boolean(state.config.sheet_backup_enabled));
+      el.sheetOwnerEmail.value = state.config.sheet_owner_email || "";
+      el.sheetScriptUrl.value = state.config.sheet_script_url || "";
+      el.sheetPrefix.value = state.config.backup?.sheet_prefix || "Subscription";
       el.pricingMarkets.innerHTML = DEFAULT_MARKETS.map((market) => {
         const pricing = pricingState.pricing[market.code] || pricingState.pricing.fallback;
         return `
@@ -690,11 +721,17 @@
         });
 
         const payload = {
+          sheet_backup_enabled: el.sheetBackupEnabled.value === "true",
+          sheet_owner_email: el.sheetOwnerEmail.value.trim() || null,
+          sheet_script_url: el.sheetScriptUrl.value.trim() || null,
           active: {
             ...nextActive,
             pricing,
           },
-          backup: state.config.backup,
+          backup: {
+            ...state.config.backup,
+            sheet_prefix: el.sheetPrefix.value.trim() || "Subscription",
+          },
         };
 
         const data = await api("/v1/admin/config", "PUT", payload);

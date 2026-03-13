@@ -28,6 +28,9 @@ export default {
       return withCors(request, json({ error: "internal_error", detail: error.message }, 500));
     }
   },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runScheduledBackupV2(env));
+  },
 };
 
 async function router(request, env, ctx) {
@@ -992,6 +995,9 @@ async function handleUpdateConfigV2(request, env, actor) {
   const next = validateCombinedConfigV2({
     google_oauth_mode: current.google_oauth_mode,
     onboarding_rule: current.onboarding_rule,
+    sheet_backup_enabled: body.sheet_backup_enabled !== undefined ? body.sheet_backup_enabled : current.sheet_backup_enabled,
+    sheet_script_url: body.sheet_script_url !== undefined ? body.sheet_script_url : current.sheet_script_url,
+    sheet_owner_email: body.sheet_owner_email !== undefined ? body.sheet_owner_email : current.sheet_owner_email,
     active: body.active || current.active,
     upcoming: body.upcoming !== undefined ? body.upcoming : current.upcoming,
     backup: { ...current.backup, ...(body.backup || {}) },
@@ -1066,16 +1072,76 @@ async function handleCreateCodeBatchV2(request, env, db, user) {
 }
 
 async function handleManualBackupV2(env) {
+  const config = await getAppConfigV2(env);
+  if (!config.sheet_backup_enabled) return json({ error: "sheet_backup_disabled" }, 409);
+  if (!config.sheet_script_url) return json({ error: "sheet_script_url_required" }, 409);
+
   const queue = await getStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
   if (!(queue.regular?.length || queue.bulk?.length)) return json({ ok: true, sent: false, detail: "queue_empty" });
-  const sentAt = new Date().toISOString();
-  await putStoreJson(env, STORE_LAST_BATCH_KEY, { sent_at: sentAt, regular: queue.regular || [], bulk: queue.bulk || [] });
-  await putStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
+
+  const result = await flushQueueToSheetsV2(env, config, queue);
+  if (result.sent_regular.length || result.sent_bulk.length) {
+    const sentAt = result.sent_at;
+    await putStoreJson(env, STORE_LAST_BATCH_KEY, {
+      sent_at: sentAt,
+      regular: result.sent_regular,
+      bulk: result.sent_bulk,
+    });
+    config.backup.last_backup_at = sentAt;
+    config.backup.last_sent_batch_at = sentAt;
+    await putStoreJson(env, STORE_CONFIG_KEY, config);
+  }
+
+  await putStoreJson(env, STORE_QUEUE_KEY, {
+    regular: result.remaining_regular,
+    bulk: result.remaining_bulk,
+  });
+
+  if (result.errors.length && !(result.sent_regular.length || result.sent_bulk.length)) {
+    return json({
+      ok: false,
+      sent: false,
+      errors: result.errors,
+      regular_rows: 0,
+      bulk_rows: 0,
+    }, 502);
+  }
+
+  return json({
+    ok: result.errors.length === 0,
+    sent: result.sent_regular.length > 0 || result.sent_bulk.length > 0,
+    partial: result.errors.length > 0,
+    last_backup_at: result.sent_at,
+    regular_rows: result.sent_regular.length,
+    bulk_rows: result.sent_bulk.length,
+    remaining_regular_rows: result.remaining_regular.length,
+    remaining_bulk_rows: result.remaining_bulk.length,
+    errors: result.errors,
+  });
+}
+
+async function runScheduledBackupV2(env) {
   const config = await getAppConfigV2(env);
-  config.backup.last_backup_at = sentAt;
-  config.backup.last_sent_batch_at = sentAt;
+  if (!config.sheet_backup_enabled || !config.sheet_script_url) return;
+  const queue = await getStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
+  if (!(queue.regular?.length || queue.bulk?.length)) return;
+
+  const result = await flushQueueToSheetsV2(env, config, queue);
+  if (!(result.sent_regular.length || result.sent_bulk.length)) return;
+
+  await putStoreJson(env, STORE_LAST_BATCH_KEY, {
+    sent_at: result.sent_at,
+    regular: result.sent_regular,
+    bulk: result.sent_bulk,
+  });
+  await putStoreJson(env, STORE_QUEUE_KEY, {
+    regular: result.remaining_regular,
+    bulk: result.remaining_bulk,
+  });
+
+  config.backup.last_backup_at = result.sent_at;
+  config.backup.last_sent_batch_at = result.sent_at;
   await putStoreJson(env, STORE_CONFIG_KEY, config);
-  return json({ ok: true, sent: true, last_backup_at: sentAt, regular_rows: queue.regular.length, bulk_rows: queue.bulk.length });
 }
 
 async function requireAuthV2(request, env) {
@@ -1220,6 +1286,9 @@ function defaultConfigV2() {
   return {
     google_oauth_mode: "google_oauth_only",
     onboarding_rule: "first_user_admin",
+    sheet_backup_enabled: false,
+    sheet_script_url: null,
+    sheet_owner_email: null,
     active: {
       payment_methods: DEFAULT_PAYMENT_METHODS,
       pricing: {
@@ -1241,6 +1310,9 @@ function validateCombinedConfigV2(input) {
   return {
     google_oauth_mode: "google_oauth_only",
     onboarding_rule: "first_user_admin",
+    sheet_backup_enabled: Boolean(input.sheet_backup_enabled),
+    sheet_script_url: input.sheet_script_url ? String(input.sheet_script_url) : null,
+    sheet_owner_email: input.sheet_owner_email ? String(input.sheet_owner_email).toLowerCase() : null,
     active: validateConfigPayloadV2(input.active || {}),
     upcoming: input.upcoming ? { effective_at: new Date(input.upcoming.effective_at).toISOString(), config: validateConfigPayloadV2(input.upcoming.config || {}) } : null,
     backup: {
@@ -1318,6 +1390,138 @@ async function enqueueBulkRowV2(env, row) {
   const queue = await getStoreJson(env, STORE_QUEUE_KEY, { regular: [], bulk: [] });
   queue.bulk.push({ id: crypto.randomUUID(), queued_at: new Date().toISOString(), ...row });
   await putStoreJson(env, STORE_QUEUE_KEY, queue);
+}
+
+async function flushQueueToSheetsV2(env, config, queue) {
+  const sentAt = new Date().toISOString();
+  const sentRegular = [];
+  const sentBulk = [];
+  const remainingRegular = [...(queue.regular || [])];
+  const remainingBulk = [...(queue.bulk || [])];
+  const errors = [];
+
+  if (remainingRegular.length) {
+    try {
+      await postRowsToSheetScriptV2(config.sheet_script_url, {
+        mode: "regular",
+        spreadsheet_title: buildSheetSpreadsheetTitleV2(config, false, sentAt),
+        sheet_title: buildSheetMonthTitleV2(sentAt, config.backup?.timezone || "UTC+7"),
+        owner_email: config.sheet_owner_email || null,
+        rows: remainingRegular.map(mapRegularSheetRowV2),
+      });
+      sentRegular.push(...remainingRegular);
+      remainingRegular.length = 0;
+    } catch (error) {
+      errors.push({ bucket: "regular", detail: error.message });
+    }
+  }
+
+  if (remainingBulk.length) {
+    try {
+      await postRowsToSheetScriptV2(config.sheet_script_url, {
+        mode: "bulk_gift_card",
+        spreadsheet_title: buildSheetSpreadsheetTitleV2(config, true, sentAt),
+        sheet_title: buildSheetMonthTitleV2(sentAt, config.backup?.timezone || "UTC+7"),
+        owner_email: config.sheet_owner_email || null,
+        rows: remainingBulk.flatMap(expandBulkSheetRowsV2),
+      });
+      sentBulk.push(...remainingBulk);
+      remainingBulk.length = 0;
+    } catch (error) {
+      errors.push({ bucket: "bulk", detail: error.message });
+    }
+  }
+
+  return {
+    sent_at: sentAt,
+    sent_regular: sentRegular,
+    sent_bulk: sentBulk,
+    remaining_regular: remainingRegular,
+    remaining_bulk: remainingBulk,
+    errors,
+  };
+}
+
+async function postRowsToSheetScriptV2(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`sheet_script_http_${response.status}${body ? `:${body.slice(0, 200)}` : ""}`);
+  }
+  const data = await response.json().catch(() => ({}));
+  if (data && data.ok === false) {
+    throw new Error(data.error || "sheet_script_rejected");
+  }
+  return data;
+}
+
+function buildSheetSpreadsheetTitleV2(config, isBulk, isoDate) {
+  const year = getBackupDatePartsV2(isoDate, config.backup?.timezone || "UTC+7").year;
+  const prefix = config.sheet_spreadsheet_prefix || config.backup?.sheet_prefix || "Subscription";
+  return isBulk ? `${prefix} Gift Card Issuance ${year}` : `${prefix} ${year}`;
+}
+
+function buildSheetMonthTitleV2(isoDate, timezoneLabel) {
+  return getBackupDatePartsV2(isoDate, timezoneLabel).month;
+}
+
+function getBackupDatePartsV2(isoDate, timezoneLabel) {
+  const date = new Date(isoDate);
+  const offsetMinutes = parseTimezoneOffsetMinutesV2(timezoneLabel);
+  const shifted = new Date(date.getTime() + offsetMinutes * 60 * 1000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+  };
+}
+
+function parseTimezoneOffsetMinutesV2(timezoneLabel) {
+  const match = String(timezoneLabel || "UTC+7").match(/^UTC([+-])(\d{1,2})(?::?(\d{2}))?$/i);
+  if (!match) return 7 * 60;
+  const sign = match[1] === "-" ? -1 : 1;
+  const hours = Number(match[2] || 0);
+  const minutes = Number(match[3] || 0);
+  return sign * (hours * 60 + minutes);
+}
+
+function mapRegularSheetRowV2(row) {
+  return {
+    id: row.id,
+    queued_at: row.queued_at,
+    event_type: row.event_type || "",
+    code_source: row.source || "",
+    code_value: row.code_value || "",
+    duration_code: row.duration_code || "",
+    status: row.status || "",
+    external_payment_id: row.external_payment_id || "",
+    country: row.payment_country || "",
+    currency: row.currency || "",
+    amount: row.amount_minor != null ? row.amount_minor : "",
+    actor_email: row.actor_email || "",
+    customer_ref: row.customer_ref || "",
+    generated_at: row.generated_at || "",
+    redeemed_at: row.redeemed_at || "",
+    note: row.note || "",
+  };
+}
+
+function expandBulkSheetRowsV2(row) {
+  const codes = Array.isArray(row.codes) && row.codes.length ? row.codes : [""];
+  return codes.map((codeValue) => ({
+    id: row.id,
+    queued_at: row.queued_at,
+    batch_id: row.batch_id || "",
+    batch_note: row.note || "",
+    duration_code: row.duration_code || "",
+    quantity: row.quantity != null ? row.quantity : "",
+    code_value: codeValue,
+    issued_by_email: row.actor_email || "",
+    generated_at: row.generated_at || "",
+  }));
 }
 
 function serializeCodeRowV2(row) {

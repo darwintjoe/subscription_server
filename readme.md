@@ -75,20 +75,26 @@ See [`docs/client-app-integration.md`](C:\workspace\subscription_server\docs\cli
 
 ## Google Sheet backup
 The Worker does not write directly to Google Sheets with end-user OAuth. Instead, the admin page configures a Google Apps Script or equivalent webhook endpoint in:
+- `sheet_backup_enabled`
 - `sheet_script_url`
-- `sheet_spreadsheet_prefix`
 - `sheet_owner_email`
+- `backup.sheet_prefix`
 
-When sheet backup is enabled, code issue/redeem events POST JSON to that endpoint with:
+When sheet backup is enabled, the Worker sends batched queued rows to that endpoint with:
+- `mode`
+  `regular` or `bulk_gift_card`
 - `spreadsheet_title`
   Example: `Subscription 2026`
 - `sheet_title`
   Example: `03`
 - `owner_email`
-- `event_type`
-- `record`
+- `rows`
 
 This keeps the yearly file / monthly tab naming convention while letting the first admin own the backup destination.
+
+Setup guide and template:
+- [`docs/google-apps-script-setup.md`](C:\workspace\subscription_server\docs\google-apps-script-setup.md)
+- [`templates/google-apps-script/Code.gs`](C:\workspace\subscription_server\templates\google-apps-script\Code.gs)
 
 ## Open the frontends
 - Admin: `frontend/admin/index.html`

@@ -83,6 +83,12 @@ Split:
 
 - regular transactions go to the normal transaction sheet
 - bulk gift-card issuance goes to a separate Google Sheet file
+- Google-side append bridge is deployed as a Google Apps Script Web App
+
+Reference setup:
+
+- [`docs/google-apps-script-setup.md`](C:\workspace\subscription_server\docs\google-apps-script-setup.md)
+- [`templates/google-apps-script/Code.gs`](C:\workspace\subscription_server\templates\google-apps-script\Code.gs)
 
 ## 3. Authentication and User Model
 
@@ -328,8 +334,6 @@ Documented for the separate app team in [`docs/client-app-integration.md`](C:\wo
 These are not fully implemented yet:
 
 - real payment provider integration
-- live Google Sheets API read/write integration
-- production deployment of the new Node backend
 - client app UI inside this repository
 
 ## 12. Reference Note
